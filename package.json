@@ -1,0 +1,42 @@
+{
+  "name": "healthcare-management-platform",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test:step7": "node --experimental-strip-types --import ./scripts/step7/register.mjs scripts/step7/offline-contract-tests.mjs",
+    "test:step7:live": "node --experimental-strip-types --import ./scripts/step7/register.mjs scripts/step7/live-contract-tests.mjs",
+    "test:step8": "node --experimental-strip-types --import ./scripts/step8/register.mjs scripts/step8/offline-contract-tests.mjs",
+    "test:step9": "node --experimental-strip-types --import ./scripts/step9/register.mjs scripts/step9/offline-contract-tests.mjs",
+    "test:review:live": "node --experimental-strip-types --import ./scripts/step7/register.mjs scripts/step7/review-workflow-live-tests.mjs",
+    "test:step10": "node --conditions=react-server --experimental-strip-types --import ./scripts/step8/register.mjs scripts/step10-smoke.mjs",
+    "test": "npm run test:step7 && npm run test:step8 && npm run test:step9 && npm run test:step10"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "clsx": "^2.1.1",
+    "jose": "^6.2.12",
+    "mongoose": "^8.0.0",
+    "next": "16.3.8",
+    "pdf-lib": "^1.17.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "server-only": "^0.0.1",
+    "tailwind-merge": "^3.0.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.8",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

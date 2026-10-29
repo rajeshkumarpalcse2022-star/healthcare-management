@@ -10,6 +10,10 @@ import {
 } from "@/lib/api/response";
 import { toDoctorDto } from "@/lib/api/serializers";
 import { Doctor } from "@/models/Doctor";
+// Import side-effect: registers the "Clinic" model that the populated
+// `doctor.clinicId` references by name. Without it, `.populate()` throws
+// MissingSchemaError and this route returns 503.
+import "@/models/Clinic";
 import { doctorIdSchema, doctorStatusSchema } from "@/lib/validation/doctor";
 import { toFieldIssues } from "@/lib/validation/common";
 

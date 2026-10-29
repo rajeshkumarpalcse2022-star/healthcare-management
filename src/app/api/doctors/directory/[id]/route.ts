@@ -6,6 +6,10 @@ import { errorResponse, itemResponse, logApiFailure } from "@/lib/api/response";
 import { toDoctorPublicProfile } from "@/lib/appointment/dto";
 import { connectToDatabase } from "@/lib/db";
 import { Doctor } from "@/models/Doctor";
+// Import side-effect: registers the "Clinic" model that the populated
+// `doctor.clinicId` / `doctor.clinicIds` references by name. Without it,
+// `.populate()` throws MissingSchemaError and this route returns 503.
+import "@/models/Clinic";
 import { toFieldIssues } from "@/lib/validation/common";
 import { appointmentIdSchema } from "@/lib/validation/appointment";
 import type { SafeUser } from "@/types/auth";

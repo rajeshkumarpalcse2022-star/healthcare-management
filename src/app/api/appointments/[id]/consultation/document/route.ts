@@ -19,6 +19,10 @@ import { appointmentIdSchema } from "@/lib/validation/appointment";
 import { toFieldIssues } from "@/lib/validation/common";
 import { Appointment } from "@/models/Appointment";
 import { ConsultationRecord } from "@/models/ConsultationRecord";
+// Import side-effect: registers the "Clinic" model that the populated
+// `appointment.clinicId` references by name. Without it, `.populate()`
+// throws MissingSchemaError and this route returns 503.
+import "@/models/Clinic";
 import type { SafeUser } from "@/types/auth";
 
 export const runtime = "nodejs";

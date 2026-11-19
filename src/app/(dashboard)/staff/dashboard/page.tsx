@@ -28,16 +28,16 @@ const quickLinks = [
     description: "Browse the patient directory (read-only).",
   },
   {
-    label: "Online Booking",
+    label: "Lab Visit",
     href: "/lab-bookings",
     icon: IconCalendarCheck,
-    description: "Process online lab booking requests.",
+    description: "Review lab visit requests.",
   },
   {
     label: "Collection Requests",
     href: "/home-collections/manage",
     icon: IconHome,
-    description: "View and track home sample collection requests.",
+    description: "All lab visit and home collection requests.",
   },
   {
     label: "Billing & Payment",

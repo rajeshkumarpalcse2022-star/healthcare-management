@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 import {
   IconCalendarCheck,
@@ -70,7 +69,6 @@ export interface BookingFlowProps {
  * happens on the server; the client only shapes the flow.
  */
 export function BookingFlow({ user }: BookingFlowProps) {
-  const router = useRouter();
   const [step, setStep] = React.useState(1);
   // Furthest step reached - state (not a ref) because the step picker reads
   // it during render.
@@ -81,15 +79,6 @@ export function BookingFlow({ user }: BookingFlowProps) {
   );
   const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
   const [departmentFilter, setDepartmentFilter] = React.useState("");
-  /**
-   * Sample collection method chosen when the selection offers both options.
-   * Only ever "LAB_VISIT" here - a home-collection choice hands the patient
-   * over to the dedicated home collection wizard.
-   */
-  const [collectionMethod, setCollectionMethod] = React.useState<
-    "LAB_VISIT" | "HOME_COLLECTION" | ""
-  >("");
-  const [showMethodChoice, setShowMethodChoice] = React.useState(false);
   const { search: testSearch, setSearch: setTestSearch, applied: appliedTestSearch } =
     useDebouncedSearch();
 
@@ -262,41 +251,6 @@ export function BookingFlow({ user }: BookingFlowProps) {
     [tests, selectedIds],
   );
   const total = selectedTests.reduce((sum, test) => sum + test.price, 0);
-
-  /**
-   * Sample collection options allowed by the current selection. A single
-   * method must be allowed by EVERY selected test; otherwise the patient is
-   * told which tests conflict so they can adjust the selection.
-   */
-  const selectionMethods = React.useMemo(() => {
-    const labVisitAllowed =
-      selectedTests.length > 0 &&
-      selectedTests.every((test) => test.labVisitEnabled);
-    const homeAllowed =
-      selectedTests.length > 0 &&
-      selectedTests.every((test) => test.homeCollectionEnabled);
-    const labVisitIncompatible = selectedTests
-      .filter((test) => !test.labVisitEnabled)
-      .map((test) => test.name);
-    const homeIncompatible = selectedTests
-      .filter((test) => !test.homeCollectionEnabled)
-      .map((test) => test.name);
-    return {
-      labVisitAllowed,
-      homeAllowed,
-      labVisitIncompatible,
-      homeIncompatible,
-      offersBoth: labVisitAllowed && homeAllowed,
-    };
-  }, [selectedTests]);
-
-  /** Hand the current laboratory + test selection to the home collection wizard. */
-  function goToHomeCollection() {
-    if (!laboratory) return;
-    const params = new URLSearchParams({ lab: laboratory.id });
-    if (selectedIds.length > 0) params.set("tests", selectedIds.join(","));
-    router.push(`/home-collection?${params.toString()}`);
-  }
 
   const departmentOptions = React.useMemo(() => {
     const seen = new Map<string, string>();
@@ -484,7 +438,7 @@ export function BookingFlow({ user }: BookingFlowProps) {
                 </Button>
               </Link>
               <Link href="/my-bookings" className="inline-flex">
-                <Button variant="outline">My bookings</Button>
+                <Button variant="outline">My lab bookings</Button>
               </Link>
               <Button variant="ghost" onClick={resetFlow}>
                 Book another test
@@ -508,7 +462,7 @@ export function BookingFlow({ user }: BookingFlowProps) {
         ]}
         actions={
           <Link href="/my-bookings" className="inline-flex">
-            <Button variant="outline">My bookings</Button>
+            <Button variant="outline">My lab bookings</Button>
           </Link>
         }
       />
@@ -729,8 +683,11 @@ export function BookingFlow({ user }: BookingFlowProps) {
                   <ul className="grid grid-cols-1 gap-2.5">
                     {visibleTests.map((test) => {
                       const checked = selectedIds.includes(test.id);
+                      const labVisitUnavailable = test.labVisitEnabled === false;
                       const disabled =
-                        !checked && selectedIds.length >= MAX_TESTS_PER_BOOKING;
+                        labVisitUnavailable ||
+                        (!checked &&
+                          selectedIds.length >= MAX_TESTS_PER_BOOKING);
                       return (
                         <li key={test.id}>
                           <label
@@ -772,6 +729,9 @@ export function BookingFlow({ user }: BookingFlowProps) {
                                 {test.department
                                   ? ` · ${test.department.name}`
                                   : ""}
+                                {labVisitUnavailable
+                                  ? " · Home collection only"
+                                  : ""}
                               </span>
                             </span>
                           </label>
@@ -800,107 +760,6 @@ export function BookingFlow({ user }: BookingFlowProps) {
               />
             )}
 
-            {showMethodChoice ? (
-              <div className="mt-5 rounded-card border border-border bg-surface-muted p-4">
-                <fieldset>
-                  <legend className="text-sm font-semibold text-ink">
-                    How would you like to provide your sample?
-                  </legend>
-                  <p className="mt-1 text-sm text-ink-muted">
-                    All selected tests support both options. Choose one to
-                    continue.
-                  </p>
-                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <label
-                      className={
-                        "flex cursor-pointer items-start gap-3 rounded-card border p-4 transition-colors focus-within:ring-2 focus-within:ring-primary/60 " +
-                        (collectionMethod === "LAB_VISIT"
-                          ? "border-primary bg-primary-light/50 dark:bg-primary-muted/40"
-                          : "border-border bg-surface hover:border-primary/50")
-                      }
-                    >
-                      <input
-                        type="radio"
-                        name="sample-collection-method"
-                        value="LAB_VISIT"
-                        checked={collectionMethod === "LAB_VISIT"}
-                        onChange={() => setCollectionMethod("LAB_VISIT")}
-                        className="mt-1 size-4 shrink-0 accent-[#10B981]"
-                      />
-                      <span>
-                        <span className="block font-medium text-ink">
-                          Visit the laboratory
-                        </span>
-                        <span className="mt-0.5 block text-xs text-ink-muted">
-                          Attend your appointment at {laboratory?.name} to
-                          provide the sample.
-                        </span>
-                      </span>
-                    </label>
-                    <label
-                      className={
-                        "flex cursor-pointer items-start gap-3 rounded-card border p-4 transition-colors focus-within:ring-2 focus-within:ring-primary/60 " +
-                        (collectionMethod === "HOME_COLLECTION"
-                          ? "border-primary bg-primary-light/50 dark:bg-primary-muted/40"
-                          : "border-border bg-surface hover:border-primary/50")
-                      }
-                    >
-                      <input
-                        type="radio"
-                        name="sample-collection-method"
-                        value="HOME_COLLECTION"
-                        checked={collectionMethod === "HOME_COLLECTION"}
-                        onChange={() => setCollectionMethod("HOME_COLLECTION")}
-                        className="mt-1 size-4 shrink-0 accent-[#10B981]"
-                      />
-                      <span>
-                        <span className="block font-medium text-ink">
-                          Collect the sample from my home
-                        </span>
-                        <span className="mt-0.5 block text-xs text-ink-muted">
-                          A trained collector visits your address at the
-                          scheduled time.
-                        </span>
-                      </span>
-                    </label>
-                  </div>
-                </fieldset>
-                {selectionMethods.homeIncompatible.length > 0 ? (
-                  <p className="mt-3 text-xs text-danger">
-                    Not available for home collection:{" "}
-                    {selectionMethods.homeIncompatible.join(", ")}.
-                  </p>
-                ) : null}
-                <div className="mt-4 flex flex-wrap justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowMethodChoice(false)}
-                  >
-                    Back to tests
-                  </Button>
-                  {collectionMethod === "LAB_VISIT" ? (
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        setShowMethodChoice(false);
-                        goTo(3);
-                      }}
-                    >
-                      Continue with lab visit
-                      <IconChevronRight className="size-4" />
-                    </Button>
-                  ) : null}
-                  {collectionMethod === "HOME_COLLECTION" ? (
-                    <Button size="sm" onClick={goToHomeCollection}>
-                      Continue with home collection
-                      <IconChevronRight className="size-4" />
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
-
             <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
               <p className="text-sm text-ink-muted" aria-live="polite">
                 {selectedIds.length} test{selectedIds.length === 1 ? "" : "s"}{" "}
@@ -912,22 +771,7 @@ export function BookingFlow({ user }: BookingFlowProps) {
                   Back
                 </Button>
                 <Button
-                  onClick={() => {
-                    if (selectionMethods.offersBoth) {
-                      setCollectionMethod("");
-                      setShowMethodChoice(true);
-                      window.scrollTo({ top: 0, behavior: "smooth" });
-                      return;
-                    }
-                    if (selectionMethods.homeAllowed) {
-                      // Home-collection-only selection: the lab booking
-                      // wizard cannot continue - hand over to the home
-                      // collection flow with the current selection.
-                      goToHomeCollection();
-                      return;
-                    }
-                    goTo(3);
-                  }}
+                  onClick={() => goTo(3)}
                   disabled={selectedIds.length === 0}
                 >
                   Continue

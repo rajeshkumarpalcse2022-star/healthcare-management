@@ -15,6 +15,12 @@ export interface UserRecord {
   /** Normalised (trimmed + lowercased) and unique. */
   email: string;
   phone: string | null;
+  /**
+   * Display-safe unique account ID (`PAT-XXXXX` / `DOC-XXXXX` / `LAB-XXXXX`).
+   * Absent on legacy accounts until the backfill migration runs; new accounts
+   * always receive one at creation time.
+   */
+  uniqueId?: string;
   /** bcrypt hash - never a plain-text password. */
   passwordHash: string;
   role: Role;
@@ -76,6 +82,17 @@ const userSchema = new Schema<UserRecord>(
       trim: true,
       maxlength: 20,
       default: null,
+    },
+    uniqueId: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      maxlength: 20,
+      unique: true,
+      sparse: true,
+      // Sparse + optional: legacy accounts without a backfilled ID must not
+      // collide on `null`; the unique index only constrains real values.
+      default: undefined,
     },
     passwordHash: {
       type: String,

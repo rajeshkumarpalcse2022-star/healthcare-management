@@ -79,7 +79,12 @@ export const doctorCreateSchema = z.object({
   specialization: specializationSchema,
   clinicId: objectIdSchema,
   clinicIds: clinicIdsSchema.optional(),
-  doctorCode: codeSchema,
+  /**
+   * Optional on create: when omitted the server auto-generates a sequential
+   * code (`DOC-0001`, `DOC-0002`, ...). An explicitly supplied code is still
+   * honoured for imports / migrations.
+   */
+  doctorCode: codeSchema.optional(),
   qualification: optionalText(160, "Qualification"),
   registrationNumber: optionalText(64, "Registration number"),
   experienceYears: experienceYearsSchema.optional(),

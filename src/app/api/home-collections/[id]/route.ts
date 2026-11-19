@@ -21,6 +21,9 @@ import {
 } from "@/lib/home-collection/authorization";
 import { HomeCollection } from "@/models/HomeCollection";
 import { HomeCollectionEvent } from "@/models/HomeCollectionEvent";
+import { Invoice } from "@/models/Invoice";
+import { LabReport } from "@/models/LabReport";
+import { toLabReportRef } from "@/lib/lab-report/dto";
 import { homeCollectionIdSchema } from "@/lib/validation/home-collection";
 import type { SafeUser } from "@/types/auth";
 
@@ -124,14 +127,33 @@ export async function GET(
     // Audit timeline is only meaningful to operational viewers and the owner.
     const detail = toHomeCollectionDetailDto(collection, capabilities);
     if (isOps || isOwner) {
-      const events = await HomeCollectionEvent.find({
-        collectionId: collection._id,
-      })
-        .sort({ createdAt: -1 })
-        .limit(50)
-        .populate("actorId", "name")
-        .lean();
+      const [events, report, invoice] = await Promise.all([
+        HomeCollectionEvent.find({
+          collectionId: collection._id,
+        })
+          .sort({ createdAt: -1 })
+          .limit(50)
+          .populate("actorId", "name")
+          .lean(),
+        LabReport.findOne({ collectionId: collection._id }).lean(),
+        Invoice.findOne({
+          sourceType: "HOME_COLLECTION",
+          sourceId: collection._id,
+          status: { $ne: "VOID" },
+        })
+          .select("invoiceCode status totalAmount")
+          .lean(),
+      ]);
       detail.history = events.map(toHomeCollectionEventDto);
+      detail.report = report ? toLabReportRef(report) : null;
+      detail.invoice = invoice
+        ? {
+            id: String(invoice._id),
+            invoiceCode: invoice.invoiceCode,
+            status: invoice.status,
+            totalAmount: invoice.totalAmount,
+          }
+        : null;
     }
 
     return itemResponse(detail);

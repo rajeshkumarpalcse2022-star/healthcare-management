@@ -29,14 +29,19 @@ export interface ApiListResult<T> {
  * every write happens in a promise callback. `refresh()` bumps the key from an
  * event handler to re-issue the request.
  */
-export function useApiList<T>(url: string): {
+export function useApiList<T>(
+  url: string,
+  options: { pollIntervalMs?: number } = {},
+): {
   state: ApiListResult<T>;
   refresh: () => void;
 } {
   const [refreshKey, setRefreshKey] = React.useState(0);
   const requestKey = `${url}|${refreshKey}`;
+  const pollIntervalMs = options.pollIntervalMs ?? 0;
 
   const [payload, setPayload] = React.useState<{
+    url: string;
     requestKey: string;
     data: T[] | null;
     meta: ListMeta;
@@ -51,6 +56,7 @@ export function useApiList<T>(url: string): {
       .then((result) => {
         if (cancelled) return;
         setPayload({
+          url,
           requestKey,
           data: result.data,
           meta: result.meta,
@@ -59,14 +65,23 @@ export function useApiList<T>(url: string): {
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        setPayload({
-          requestKey,
-          data: null,
-          meta: DEFAULT_META,
-          error:
-            error instanceof ApiRequestError
-              ? error.message
-              : "Unable to load data right now.",
+        const message =
+          error instanceof ApiRequestError
+            ? error.message
+            : "Unable to load data right now.";
+        setPayload((previous) => {
+          // A failed background poll should not wipe the list the user is
+          // already looking at; the next tick will retry.
+          if (previous && previous.url === url && previous.data !== null) {
+            return { ...previous, requestKey, error: null };
+          }
+          return {
+            url,
+            requestKey,
+            data: null,
+            meta: DEFAULT_META,
+            error: message,
+          };
         });
       });
 
@@ -75,9 +90,23 @@ export function useApiList<T>(url: string): {
     };
   }, [url, requestKey]);
 
+  // Optional background refresh so cross-user status changes surface without
+  // a manual page reload.
+  React.useEffect(() => {
+    if (!url || pollIntervalMs <= 0) return;
+    const timer = window.setInterval(() => {
+      setRefreshKey((value) => value + 1);
+    }, pollIntervalMs);
+    return () => window.clearInterval(timer);
+  }, [url, pollIntervalMs]);
+
   // An empty `url` means "nothing to show yet": not loading, no data, no error.
-  const active = Boolean(url) && payload !== null && payload.requestKey === requestKey;
-  const loading = Boolean(url) && (payload === null || payload.requestKey !== requestKey);
+  // While a background poll is in flight the previous payload for the same URL
+  // stays visible (no skeleton flash); changing the URL still clears it.
+  const sameUrl = payload !== null && payload.url === url;
+  const active = Boolean(url) && sameUrl;
+  const fresh = active && payload?.requestKey === requestKey;
+  const loading = Boolean(url) && !fresh;
 
   const refresh = React.useCallback(() => {
     setRefreshKey((value) => value + 1);
@@ -88,7 +117,7 @@ export function useApiList<T>(url: string): {
       data: active ? payload?.data ?? null : null,
       meta: active ? payload?.meta ?? DEFAULT_META : DEFAULT_META,
       loading,
-      error: active ? payload?.error ?? null : null,
+      error: fresh ? payload?.error ?? null : null,
     },
     refresh,
   };

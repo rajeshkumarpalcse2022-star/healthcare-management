@@ -11,7 +11,7 @@ import { ROLES } from "@/config/roles";
 import { getCurrentUser } from "@/lib/auth";
 
 export const metadata: Metadata = {
-  title: "My Bookings",
+  title: "My lab bookings",
 };
 
 /**
@@ -29,7 +29,7 @@ export default async function MyBookingsPage() {
     <>
       <PageHeader
         eyebrow="Diagnostics"
-        title="My bookings"
+        title="My lab bookings"
         description={
           isPatient
             ? "Your lab test bookings - view details, track status or cancel when eligible."
@@ -37,7 +37,7 @@ export default async function MyBookingsPage() {
         }
         breadcrumbs={[
           { label: "Dashboard", href: "/dashboard" },
-          { label: "My bookings" },
+          { label: "My lab bookings" },
         ]}
         actions={
           isPatient ? (

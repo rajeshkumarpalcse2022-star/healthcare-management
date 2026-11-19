@@ -5,6 +5,10 @@ import { connectToDatabase } from "@/lib/db";
 import { isDuplicateKeyError, logApiFailure } from "@/lib/api/response";
 import { User } from "@/models/User";
 import {
+  generateUniqueId,
+  uniqueIdPrefixForRole,
+} from "@/lib/unique-id";
+import {
   registerSchema,
   normalizeEmail,
   toFieldIssues,
@@ -14,6 +18,8 @@ import type { AuthErrorBody, RegisterSuccessBody } from "@/types/auth";
 export const dynamic = "force-dynamic";
 
 const NO_STORE = { "Cache-Control": "no-store" };
+
+const MAX_UNIQUE_ID_ATTEMPTS = 5;
 
 function errorResponse(
   status: number,
@@ -29,11 +35,11 @@ function errorResponse(
 /**
  * POST /api/auth/register
  *
- * Creates a new PATIENT or DOCTOR account and issues a session cookie
- * (auto-login). Only `PATIENT` and `DOCTOR` are accepted - privileged
- * management roles (SUPER_ADMIN, ADMIN, LAB_MANAGER, STAFF, COLLECTOR)
- * are created exclusively through the SA/ADMIN provisioning endpoint
- * (`POST /api/users`) or the seed script (SUPER_ADMIN).
+ * Creates a PATIENT account and issues a session cookie. Only `PATIENT` is
+ * accepted - doctor and lab accounts are provisioned by administrators, and
+ * the primary patient flow is the OTP-verified signup
+ * (`/api/auth/otp/verify`). This endpoint remains as a non-OTP fallback and
+ * still mints a unique account ID.
  *
  * The password is hashed with bcrypt (cost 12) before storage; the
  * plain-text value is never persisted or logged. Duplicate email addresses
@@ -70,10 +76,29 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     const passwordHash = await hashPassword(password);
 
+    const kind = uniqueIdPrefixForRole(role);
+    if (!kind) {
+      return errorResponse(400, "Only patients can create an account.");
+    }
+
+    let uniqueId = generateUniqueId(kind);
+    for (let attempt = 0; attempt < MAX_UNIQUE_ID_ATTEMPTS; attempt += 1) {
+      const taken = await User.findOne({ uniqueId }).select("_id").lean();
+      if (!taken) break;
+      uniqueId = generateUniqueId(kind);
+      if (attempt === MAX_UNIQUE_ID_ATTEMPTS - 1) {
+        return errorResponse(
+          503,
+          "Unable to allocate your account ID right now. Please try again.",
+        );
+      }
+    }
+
     const user = await User.create({
       name,
       email,
       phone,
+      uniqueId,
       passwordHash,
       role,
       isActive: true,

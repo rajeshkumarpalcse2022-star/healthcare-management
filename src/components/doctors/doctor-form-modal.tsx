@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import { IconStethoscope } from "@/components/icons";
+import { CredentialsModal } from "@/components/shared/credentials-modal";
 import { ImageUploadField } from "@/components/shared/image-upload-field";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
@@ -24,6 +25,7 @@ import {
 } from "@/config/doctors";
 import type { ItemResponse } from "@/types/api";
 import type { Doctor } from "@/types/doctor";
+import type { ProvisionedCredentials } from "@/types/auth";
 import { issuesToErrors, type FieldErrors } from "./shared";
 
 interface DoctorFormValues {
@@ -109,6 +111,8 @@ function toPayload(values: DoctorFormValues) {
     ...values,
     clinicId: clinicIds[0] ?? "",
     clinicIds,
+    // Blank on create -> omit so the server auto-generates the code.
+    doctorCode: values.doctorCode.trim() === "" ? undefined : values.doctorCode,
     experienceYears:
       values.experienceYears.trim() === ""
         ? undefined
@@ -177,6 +181,9 @@ export function DoctorFormModal({
   const [errors, setErrors] = React.useState<FieldErrors>({});
   const [formError, setFormError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
+  const [createdCredentials, setCreatedCredentials] =
+    React.useState<ProvisionedCredentials | null>(null);
+  const [showCredentials, setShowCredentials] = React.useState(false);
 
   // Reset the form whenever the dialog opens. Render-phase adjustment keeps
   // stale values from the previous record from leaking into the next edit.
@@ -188,6 +195,8 @@ export function DoctorFormModal({
       setErrors({});
       setFormError(null);
       setSubmitting(false);
+      setCreatedCredentials(null);
+      setShowCredentials(false);
     }
   }
 
@@ -254,12 +263,18 @@ export function DoctorFormModal({
           ? `/api/doctors/${doctor!.id}`
           : "/api/doctors";
       const method = isEdit ? "PATCH" : "POST";
-      const result = await apiSend<ItemResponse<Doctor>>(
-        url,
-        method,
-        parsed.data,
-      );
+      const result = await apiSend<
+        ItemResponse<Doctor> & { credentials?: ProvisionedCredentials }
+      >(url, method, parsed.data);
+
       onSaved(result.data);
+
+      // On create, surface the one-time login credentials after the form
+      // closes so the admin can copy them before continuing.
+      if (!isEdit && !isSelfEdit && result.credentials) {
+        setCreatedCredentials(result.credentials);
+        setShowCredentials(true);
+      }
       onClose();
     } catch (error) {
       if (error instanceof ApiRequestError) {
@@ -274,42 +289,47 @@ export function DoctorFormModal({
   }
 
   return (
-    <Modal
-      open={open}
-      onClose={() => {
-        if (!submitting) onClose();
-      }}
-      title={
-        isSelfEdit ? "Edit my profile" : isEdit ? "Edit doctor" : "Add doctor"
-      }
-      description={
-        isSelfEdit
-          ? "Update your professional details. Clinic assignment, doctor code and account status stay with the administrator."
-          : isEdit
-            ? "Update the doctor profile and clinic assignments below."
-            : "Create a doctor profile and assign one or more clinics."
-      }
-      size="xl"
-      dismissible={!submitting}
-      footer={
-        <>
-          <Button
-            variant="outline"
-            onClick={onClose}
-            disabled={submitting}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            form="doctor-form"
-            loading={submitting}
-          >
-            {isEdit ? "Save changes" : "Create doctor"}
-          </Button>
-        </>
-      }
-    >
+    <>
+      <Modal
+        open={open}
+        onClose={() => {
+          if (!submitting) onClose();
+        }}
+        title={
+          isSelfEdit
+            ? "Edit my profile"
+            : isEdit
+              ? "Edit doctor"
+              : "Add doctor"
+        }
+        description={
+          isSelfEdit
+            ? "Update your professional details. Clinic assignment, doctor code and account status stay with the administrator."
+            : isEdit
+              ? "Update the doctor profile and clinic assignments below."
+              : "Create a doctor profile and assign one or more clinics."
+        }
+        size="xl"
+        dismissible={!submitting}
+        footer={
+          <>
+            <Button
+              variant="outline"
+              onClick={onClose}
+              disabled={submitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              form="doctor-form"
+              loading={submitting}
+            >
+              {isEdit ? "Save changes" : "Create doctor"}
+            </Button>
+          </>
+        }
+      >
       <form id="doctor-form" onSubmit={handleSubmit} noValidate>
         {formError ? (
           <div
@@ -430,14 +450,18 @@ export function DoctorFormModal({
               </div>
 
               <Input
-                label="Doctor code"
+                label={isEdit ? "Doctor code" : "Doctor code (optional)"}
                 name="doctorCode"
-                required
+                required={isEdit}
                 value={values.doctorCode}
                 onChange={(event) => update("doctorCode", event.target.value)}
                 error={errors.doctorCode}
-                hint="Unique code, e.g. DR-0001"
-                placeholder="DR-0001"
+                hint={
+                  isEdit
+                    ? "Unique code, e.g. DR-0001"
+                    : "Leave blank to auto-generate the next code (DR-0001, DR-0002, ...)."
+                }
+                placeholder={isEdit ? "DR-0001" : "Auto-generated"}
               />
             </>
           )}
@@ -520,6 +544,17 @@ export function DoctorFormModal({
           </p>
         ) : null}
       </form>
-    </Modal>
+      </Modal>
+
+      <CredentialsModal
+        open={showCredentials}
+        onClose={() => {
+          setShowCredentials(false);
+          setCreatedCredentials(null);
+        }}
+        credentials={createdCredentials}
+        subjectLabel="Doctor"
+      />
+    </>
   );
 }

@@ -1,12 +1,14 @@
 "use client";
 
 import * as React from "react";
+import { usePathname } from "next/navigation";
 
 import { APPOINTMENTS_CHANGED_EVENT } from "@/components/appointments/shared";
 import { Header } from "@/components/layout/header";
 import { MobileDrawer } from "@/components/layout/mobile-drawer";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Container } from "@/components/layout/container";
+import { canViewCollectionManagement } from "@/config/home-collection";
 import { useApiList } from "@/hooks/use-api-list";
 import { localDateString } from "@/lib/utils/dashboard-rows";
 import type { AppointmentSummary } from "@/types/appointment";
@@ -26,6 +28,7 @@ export function DashboardShell({
   children: React.ReactNode;
   user: SafeUser;
 }) {
+  const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
   const [today] = React.useState(() => localDateString());
   const countUrl =
@@ -37,6 +40,38 @@ export function DashboardShell({
   const todayAppointmentCount =
     user.role === "DOCTOR" ? todayState.meta.total : 0;
 
+  const canSeeRequestCounts = canViewCollectionManagement(user.role);
+  const isCollector = user.role === "COLLECTOR";
+  const labVisitCountUrl = canSeeRequestCounts
+    ? "/api/lab-bookings?status=PENDING&limit=1"
+    : "";
+  const homeCollectionCountUrl = canSeeRequestCounts
+    ? "/api/home-collections?status=PENDING&limit=1"
+    : "";
+  const assignmentCountUrl = isCollector
+    ? "/api/home-collections?status=ASSIGNED&limit=1"
+    : "";
+  const { state: labVisitCountState, refresh: refreshLabVisitCount } =
+    useApiList<unknown>(labVisitCountUrl);
+  const { state: homeCollectionCountState, refresh: refreshHomeCollectionCount } =
+    useApiList<unknown>(homeCollectionCountUrl);
+  const { state: assignmentCountState, refresh: refreshAssignmentCount } =
+    useApiList<unknown>(assignmentCountUrl);
+
+  const requestCounts: Record<string, number> = {};
+  if (canSeeRequestCounts) {
+    const labVisitPending = labVisitCountState.meta.total;
+    const homeCollectionPending = homeCollectionCountState.meta.total;
+    requestCounts["/lab-bookings"] = labVisitPending;
+    requestCounts["/home-collection"] = homeCollectionPending;
+    requestCounts["/home-collections/manage"] =
+      labVisitPending + homeCollectionPending;
+  }
+  if (isCollector) {
+    // ASSIGNED = newly assigned and not yet accepted by the collector.
+    requestCounts["/my-assignments"] = assignmentCountState.meta.total;
+  }
+
   React.useEffect(() => {
     if (user.role !== "DOCTOR") return;
     const onChanged = () => refreshToday();
@@ -44,6 +79,41 @@ export function DashboardShell({
     return () =>
       window.removeEventListener(APPOINTMENTS_CHANGED_EVENT, onChanged);
   }, [user.role, refreshToday]);
+
+  // Keep request counters fresh as the user moves between sections.
+  React.useEffect(() => {
+    if (canSeeRequestCounts) {
+      refreshLabVisitCount();
+      refreshHomeCollectionCount();
+    }
+    if (isCollector) refreshAssignmentCount();
+  }, [
+    pathname,
+    canSeeRequestCounts,
+    isCollector,
+    refreshLabVisitCount,
+    refreshHomeCollectionCount,
+    refreshAssignmentCount,
+  ]);
+
+  // Light polling so new assignments / requests surface without a full reload.
+  React.useEffect(() => {
+    if (!canSeeRequestCounts && !isCollector) return;
+    const interval = window.setInterval(() => {
+      if (canSeeRequestCounts) {
+        refreshLabVisitCount();
+        refreshHomeCollectionCount();
+      }
+      if (isCollector) refreshAssignmentCount();
+    }, 15_000);
+    return () => window.clearInterval(interval);
+  }, [
+    canSeeRequestCounts,
+    isCollector,
+    refreshLabVisitCount,
+    refreshHomeCollectionCount,
+    refreshAssignmentCount,
+  ]);
 
   return (
     <div className="flex min-h-dvh w-full bg-canvas">
@@ -57,6 +127,7 @@ export function DashboardShell({
       <Sidebar
         user={user}
         todayAppointmentCount={todayAppointmentCount}
+        requestCounts={requestCounts}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -72,6 +143,7 @@ export function DashboardShell({
         onClose={() => setMobileNavOpen(false)}
         user={user}
         todayAppointmentCount={todayAppointmentCount}
+        requestCounts={requestCounts}
       />
     </div>
   );

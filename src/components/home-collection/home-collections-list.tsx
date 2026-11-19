@@ -109,6 +109,7 @@ export function HomeCollectionsList({ user }: { user: SafeUser }) {
   });
   const { state, refresh } = useApiList<HomeCollectionSummary>(
     `/api/home-collections${query}`,
+    { pollIntervalMs: 15_000 },
   );
 
   const [prevServedPage, setPrevServedPage] = React.useState(state.meta.page);

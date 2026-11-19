@@ -61,7 +61,13 @@ export function UserMenu({ user }: { user: SafeUser }) {
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-ink">{user.name}</p>
-          <p className="truncate text-xs text-ink-subtle">{user.email}</p>
+          {user.uniqueId ? (
+            <p className="truncate font-mono text-xs font-semibold tracking-wide text-ink-subtle">
+              {user.uniqueId}
+            </p>
+          ) : (
+            <p className="truncate text-xs text-ink-subtle">{user.email}</p>
+          )}
         </div>
         <Badge variant="primary" size="sm">
           {roleLabel(user.role)}

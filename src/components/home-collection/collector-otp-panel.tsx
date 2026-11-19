@@ -5,6 +5,7 @@ import * as React from "react";
 import { IconShieldCheck } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/toast";
 import { COLLECTION_OTP_PATTERN } from "@/config/home-collection";
 
 export interface CollectorOtpPanelProps {
@@ -24,6 +25,7 @@ export function CollectorOtpPanel({
   attemptsRemaining,
   onCompleted,
 }: CollectorOtpPanelProps) {
+  const { success } = useToast();
   const [otp, setOtp] = React.useState("");
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -60,6 +62,10 @@ export function CollectorOtpPanel({
         return;
       }
       setOtp("");
+      success(
+        "Collection completed successfully",
+        "OTP verified. Status is now Collected for the patient and laboratory team.",
+      );
       onCompleted();
     } catch {
       setError("Unable to verify the OTP. Please try again.");

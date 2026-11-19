@@ -122,9 +122,8 @@ function eq(label, actual, expected) {
  * Public sign-up role allow-list
  * ------------------------------------------------------------------ */
 
-eq("PUBLIC_SIGNUP_ROLES is exactly PATIENT + DOCTOR", PUBLIC_SIGNUP_ROLES, [
+eq("PUBLIC_SIGNUP_ROLES is exactly PATIENT", PUBLIC_SIGNUP_ROLES, [
   "PATIENT",
-  "DOCTOR",
 ]);
 
 check(
@@ -165,11 +164,19 @@ const patientParsed = registerSchema.safeParse(validPatient);
 check("valid PATIENT registration passes", patientParsed.success);
 
 const doctorParsed = registerSchema.safeParse(validDoctor);
-check("valid DOCTOR registration passes", doctorParsed.success);
+check("DOCTOR registration is rejected at sign-up", !doctorParsed.success);
+
+const patientWithoutPhone = {
+  name: "Jane Patient",
+  email: "jane2@example.com",
+  password: "correct-horse-battery",
+  confirmPassword: "correct-horse-battery",
+  role: "PATIENT",
+};
 
 check(
   "phone is optional for registration",
-  registerSchema.safeParse({ ...validDoctor }).success,
+  registerSchema.safeParse(patientWithoutPhone).success,
 );
 
 const emptyPhoneParsed = registerSchema.safeParse({
@@ -267,11 +274,17 @@ if (loginParsed.success) {
   eq("rememberMe defaults to false", loginParsed.data.rememberMe, false);
 }
 
-const loginBadEmail = loginSchema.safeParse({
-  email: "nope",
+const loginUniqueId = loginSchema.safeParse({
+  email: "DOC-G0ZPQ",
+  password: "correct-horse-battery",
+});
+check("login accepts a unique account ID identifier", loginUniqueId.success);
+
+const loginEmptyIdentifier = loginSchema.safeParse({
+  email: "",
   password: "x",
 });
-check("login rejects invalid email", !loginBadEmail.success);
+check("login rejects an empty identifier", !loginEmptyIdentifier.success);
 
 /* ------------------------------------------------------------------ *
  * normalizeEmail
@@ -388,15 +401,15 @@ function labelHref(section, label) {
 
 const labManagerNav = roleSectionSource("LAB_MANAGER");
 eq(
-  "LAB_MANAGER Online Booking opens the management list",
-  labelHref(labManagerNav, "Online Booking"),
+  "LAB_MANAGER Lab Visit opens the management list",
+  labelHref(labManagerNav, "Lab Visit"),
   "/lab-bookings",
 );
 
 const staffNav = roleSectionSource("STAFF");
 eq(
-  "STAFF Online Booking opens the management list",
-  labelHref(staffNav, "Online Booking"),
+  "STAFF Lab Visit opens the management list",
+  labelHref(staffNav, "Lab Visit"),
   "/lab-bookings",
 );
 
@@ -434,12 +447,11 @@ check(
   labelHref(collectorNav, "Dashboard") === "/collector/dashboard",
 );
 
-// Base navigation still feeds ADMIN/SUPER_ADMIN the patient create flow
-// (both roles may create bookings directly).
+// Base navigation points ADMIN/SUPER_ADMIN at the Lab Visit management list.
 check(
-  "base navigation keeps the create-flow Online Booking link",
-  /label: "Online Booking",\s*href: "\/bookings"/.test(navSource),
-  "base Online Booking link missing",
+  "base navigation links the Lab Visit management list",
+  /label: "Lab Visit",\s*href: "\/lab-bookings"/.test(navSource),
+  "base Lab Visit link missing",
 );
 
 const bookATestSource = readFileSync(
@@ -483,7 +495,7 @@ const labManagerDashboardSource = readFileSync(
 );
 check(
   "lab-manager dashboard quick link opens the management list",
-  /label: "Online Bookings",\s*href: "\/lab-bookings"/.test(labManagerDashboardSource),
+  /label: "Lab Visits",\s*href: "\/lab-bookings"/.test(labManagerDashboardSource),
   "lab-manager dashboard quick link not updated",
 );
 
@@ -512,9 +524,9 @@ const patientWidgetSource = readSrc(
   "src", "components", "dashboards", "patient-dashboard.tsx",
 );
 check(
-  "patient widgets fetch the existing bookings list API",
-  patientWidgetSource.includes('"/api/lab-bookings?limit=25"'),
-  "bookings query missing",
+  "patient widgets no longer fetch the lab bookings list API",
+  !patientWidgetSource.includes("/api/lab-bookings"),
+  "lab bookings query still present",
 );
 check(
   "patient widgets scope pickups with the existing dateFrom filter",
@@ -529,15 +541,30 @@ check(
   "useApiList not wired in",
 );
 check(
-  "patient widgets shape rows with the pure helpers",
-  patientWidgetSource.includes("pickUpcomingBookings(") &&
-    patientWidgetSource.includes("pickUpcomingCollections("),
-  "row helpers not used",
+  "patient dashboard shows one My bookings widget for collections",
+  patientWidgetSource.includes('title="My bookings"') &&
+    !patientWidgetSource.includes('title="Lab bookings"'),
+  "patient bookings widget not consolidated",
+);
+check(
+  "patient widgets shape booking rows with the pure helper",
+  patientWidgetSource.includes("pickUpcomingCollections(") &&
+    !patientWidgetSource.includes("pickUpcomingBookings("),
+  "collection row helper not used",
 );
 check(
   "patient widgets never issue a raw fetch",
   !/fetch\(/.test(patientWidgetSource),
   "raw fetch found",
+);
+
+const patientNavigationSource = readSrc("src", "config", "navigation.ts");
+check(
+  "patient navigation has one My Bookings entry for collections",
+  /label: "My Bookings",\s*href: "\/my-collections"/.test(
+    patientNavigationSource,
+  ) && !patientNavigationSource.includes('href: "/my-bookings"'),
+  "patient navigation still lists the lab bookings section",
 );
 
 check(
@@ -605,11 +632,11 @@ check(
   "review queue link missing",
 );
 check(
-  "lab-manager dashboard links the collections management view",
-  /label: "Home Collections",\s*href: "\/home-collections\/manage\?view=collections"/.test(
+  "lab-manager dashboard links the home collection section",
+  /label: "Home Collections",\s*href: "\/home-collection"/.test(
     labManagerDashboardSource,
   ),
-  "collections view link missing",
+  "home collection link missing",
 );
 check(
   "lab-manager dashboard links the tests catalogue",
@@ -1409,8 +1436,8 @@ check(
 
 const p0aRegisterSource = readSrc("src", "app", "api", "auth", "register", "route.ts");
 check(
-  "register docblock points at the real provisioning endpoint",
-  p0aRegisterSource.includes("POST /api/users"),
+  "register docblock points at the real patient signup flow",
+  p0aRegisterSource.includes("/api/auth/otp/verify"),
 );
 
 const p0aStaffPage = readSrc("src", "app", "(dashboard)", "staff", "page.tsx");

@@ -2,6 +2,7 @@
 
 import * as React from "react";
 
+import { CredentialsModal } from "@/components/shared/credentials-modal";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,7 @@ import {
 import { toFieldIssues } from "@/lib/validation/common";
 import type { ItemResponse } from "@/types/api";
 import type { Laboratory } from "@/types/laboratory";
+import type { ProvisionedCredentials } from "@/types/auth";
 import type { FieldErrors } from "./shared";
 
 interface LaboratoryFormValues {
@@ -214,6 +216,9 @@ export function LaboratoryFormModal({
     React.useState<FieldErrors>({});
   const [formError, setFormError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
+  const [createdCredentials, setCreatedCredentials] =
+    React.useState<ProvisionedCredentials | null>(null);
+  const [showCredentials, setShowCredentials] = React.useState(false);
 
   // Reset the form whenever the dialog opens. Render-phase adjustment keeps
   // stale values from the previous record from leaking into the next edit.
@@ -229,6 +234,8 @@ export function LaboratoryFormModal({
       setHomeCollectionErrors({});
       setFormError(null);
       setSubmitting(false);
+      setCreatedCredentials(null);
+      setShowCredentials(false);
     }
   }
 
@@ -360,15 +367,20 @@ export function LaboratoryFormModal({
         ? `/api/laboratories/${laboratory!.id}`
         : "/api/laboratories";
       const method = isEdit ? "PATCH" : "POST";
-      const result = await apiSend<ItemResponse<Laboratory>>(
-        url,
-        method,
-        parsed.data,
-      );
+      const result = await apiSend<
+        ItemResponse<Laboratory> & { credentials?: ProvisionedCredentials }
+      >(url, method, parsed.data);
       showSuccess(
         isEdit ? "Laboratory updated" : "Laboratory created",
         `${result.data.name} has been saved.`,
       );
+
+      // On create, surface the one-time login credentials to the admin.
+      if (!isEdit && result.credentials) {
+        setCreatedCredentials(result.credentials);
+        setShowCredentials(true);
+      }
+
       onSaved(result.data);
       onClose();
     } catch (error) {
@@ -387,34 +399,35 @@ export function LaboratoryFormModal({
   }
 
   return (
-    <Modal
-      open={open}
-      onClose={() => {
-        if (!submitting) onClose();
-      }}
-      title={isEdit ? "Edit laboratory" : "Add laboratory"}
-      description={
-        isEdit
-          ? "Update the laboratory details below."
-          : "Register a new laboratory in the directory."
-      }
-      size="xl"
-      dismissible={!submitting}
-      footer={
-        <>
-          <Button
-            variant="outline"
-            onClick={onClose}
-            disabled={submitting}
-          >
-            Cancel
-          </Button>
-          <Button type="submit" form="laboratory-form" loading={submitting}>
-            {isEdit ? "Save changes" : "Create laboratory"}
-          </Button>
-        </>
-      }
-    >
+    <>
+      <Modal
+        open={open}
+        onClose={() => {
+          if (!submitting) onClose();
+        }}
+        title={isEdit ? "Edit laboratory" : "Add laboratory"}
+        description={
+          isEdit
+            ? "Update the laboratory details below."
+            : "Register a new laboratory in the directory."
+        }
+        size="xl"
+        dismissible={!submitting}
+        footer={
+          <>
+            <Button
+              variant="outline"
+              onClick={onClose}
+              disabled={submitting}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" form="laboratory-form" loading={submitting}>
+              {isEdit ? "Save changes" : "Create laboratory"}
+            </Button>
+          </>
+        }
+      >
       <form id="laboratory-form" onSubmit={handleSubmit} noValidate>
         {formError ? (
           <div
@@ -474,10 +487,16 @@ export function LaboratoryFormModal({
             name="email"
             type="email"
             autoComplete="email"
+            required
             value={values.email}
             onChange={(event) => update("email", event.target.value)}
             error={errors.email}
             placeholder="lab@example.com"
+            hint={
+              isEdit
+                ? undefined
+                : "Becomes the laboratory login email - an account is created automatically."
+            }
           />
 
           <Input
@@ -823,6 +842,17 @@ export function LaboratoryFormModal({
           )}
         </div>
       </form>
-    </Modal>
+      </Modal>
+
+      <CredentialsModal
+        open={showCredentials}
+        onClose={() => {
+          setShowCredentials(false);
+          setCreatedCredentials(null);
+        }}
+        credentials={createdCredentials}
+        subjectLabel="Laboratory"
+      />
+    </>
   );
 }

@@ -217,6 +217,33 @@
   }
 }
 
+@keyframes counter-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.18);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes counter-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgb(220 38 38 / 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 5px rgb(220 38 38 / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgb(220 38 38 / 0);
+  }
+}
+
 /* ==============================================================================
    BASE
    ============================================================================== */
@@ -468,6 +495,12 @@
 
   .animate-slide-in-left {
     animation: slide-in-left 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .animate-counter-pop {
+    animation:
+      counter-pop 0.45s cubic-bezier(0.16, 1, 0.3, 1) both,
+      counter-pulse 2s ease-out 0.45s infinite;
   }
 
   .skeleton {

@@ -11,12 +11,15 @@ import { canViewBookingManagement } from "@/config/lab-bookings";
 import { getCurrentUser } from "@/lib/auth";
 
 export const metadata: Metadata = {
-  title: "Lab Bookings",
+  title: "Lab Visits",
 };
 
 /**
- * Operational booking management (`/lab-bookings`).
+ * Lab visit management (`/lab-bookings`).
  *
+ * Every lab-visit request - pending, confirmed, rejected and completed - is
+ * reviewed from this surface. Home-collection requests have their own section;
+ * the merged Collection Requests queue still lists both request types.
  * Visible to super admin, admin, lab manager and staff - the same read
  * policy the lab module already applies. Other roles get an explicit
  * no-access state; the API re-enforces the same rules on every request.
@@ -29,11 +32,11 @@ export default async function LabBookingsPage() {
     <>
       <PageHeader
         eyebrow="Diagnostics"
-        title="Lab bookings"
-        description="Review, confirm and manage laboratory bookings across the platform."
+        title="Lab visits"
+        description="Review and manage lab-visit requests and bookings across the platform."
         breadcrumbs={[
           { label: "Dashboard", href: "/dashboard" },
-          { label: "Lab bookings" },
+          { label: "Lab visits" },
         ]}
         actions={
           allowed ? (
@@ -51,8 +54,8 @@ export default async function LabBookingsPage() {
           <CardContent>
             <EmptyState
               icon={IconShieldCheck}
-              title="No access to booking management"
-              description="You do not have permission to view lab bookings. Contact your administrator if you believe this is a mistake."
+              title="No access to lab visit management"
+              description="You do not have permission to view lab visits. Contact your administrator if you believe this is a mistake."
             />
           </CardContent>
         </Card>

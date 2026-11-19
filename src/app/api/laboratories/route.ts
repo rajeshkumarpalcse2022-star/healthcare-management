@@ -9,12 +9,14 @@ import {
   buildListMeta,
   errorResponse,
   isDuplicateKeyError,
-  itemResponse,
   listResponse,
   logApiFailure,
+  NO_STORE,
 } from "@/lib/api/response";
 import { toLaboratoryDto } from "@/lib/api/serializers";
+import { provisionAccount } from "@/lib/provisioning";
 import { Laboratory } from "@/models/Laboratory";
+import { User } from "@/models/User";
 import {
   laboratoryCreateSchema,
   laboratoryListQuerySchema,
@@ -24,6 +26,9 @@ import {
   statusToBoolean,
   toFieldIssues,
 } from "@/lib/validation/common";
+import type { ItemResponse } from "@/types/api";
+import type { Laboratory as LaboratoryDto } from "@/types/laboratory";
+import type { ProvisionedCredentials } from "@/types/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -100,10 +105,11 @@ export async function GET(request: Request): Promise<NextResponse> {
 /**
  * POST /api/laboratories
  *
- * Creates a laboratory. SUPER_ADMIN and ADMIN only (laboratory creation is
- * never available to LAB_MANAGER - scoped accounts edit their own records,
- * they do not mint new ones). Duplicate business codes are rejected with 409
- * before the insert; the unique index is the final guard.
+ * Creates a laboratory AND a LAB_MANAGER login account in the same
+ * operation. The User account receives a generated unique ID (`LAB-XXXXX`)
+ * and a temporary password; the credentials are returned exactly once in the
+ * response so the administrator can hand them to the laboratory.
+ * SUPER_ADMIN and ADMIN only.
  */
 export async function POST(request: Request): Promise<NextResponse> {
   try {
@@ -141,6 +147,27 @@ export async function POST(request: Request): Promise<NextResponse> {
       );
     }
 
+    // A login email is required to mint the LAB_MANAGER account.
+    const loginEmail = parsed.data.email?.trim();
+    if (!loginEmail) {
+      return errorResponse(
+        400,
+        "An email address is required - it becomes the laboratory login email.",
+        [{ field: "email", message: "Email is required for the lab account." }],
+      );
+    }
+
+    const existingUser = await User.findOne({ email: loginEmail })
+      .select("_id")
+      .lean();
+    if (existingUser) {
+      return errorResponse(
+        409,
+        "A user with this email already exists. Use a different email.",
+        [{ field: "email", message: "This email is already in use." }],
+      );
+    }
+
     const laboratory = await Laboratory.create({
       name: parsed.data.name,
       code: parsed.data.code,
@@ -161,7 +188,35 @@ export async function POST(request: Request): Promise<NextResponse> {
       isActive: true,
     });
 
-    return itemResponse(toLaboratoryDto(laboratory.toObject()), 201);
+    const provisioned = await provisionAccount({
+      name: `${parsed.data.name} (Lab Manager)`,
+      email: loginEmail,
+      phone: parsed.data.phone ?? null,
+      role: "LAB_MANAGER",
+    });
+
+    // Scope the new LAB_MANAGER to just this laboratory (fail-closed default
+    // is []; give them their own lab so the dashboard is immediately usable).
+    await User.updateOne(
+      { _id: provisioned.user.id },
+      { $set: { laboratoryIds: [String(laboratory._id)] } },
+    );
+
+    const credentials: ProvisionedCredentials = {
+      uniqueId: provisioned.user.uniqueId ?? "",
+      password: provisioned.plainPassword,
+    };
+
+    return NextResponse.json<
+      ItemResponse<LaboratoryDto> & { credentials?: ProvisionedCredentials }
+    >(
+      {
+        success: true,
+        data: toLaboratoryDto(laboratory.toObject()),
+        credentials,
+      },
+      { status: 201, headers: NO_STORE },
+    );
   } catch (error) {
     if (isDuplicateKeyError(error)) {
       return errorResponse(

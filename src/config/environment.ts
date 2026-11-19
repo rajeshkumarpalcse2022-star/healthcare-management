@@ -46,4 +46,38 @@ export const environment = {
       return Boolean(process.env.AUTH_SECRET);
     },
   },
+  smtp: {
+    get host(): string {
+      return required("SMTP_HOST", process.env.SMTP_HOST);
+    },
+    get port(): number {
+      const raw = required("SMTP_PORT", process.env.SMTP_PORT);
+      const port = Number(raw);
+      if (!Number.isInteger(port) || port < 1 || port > 65535) {
+        throw new Error('Invalid SMTP_PORT value - expected a number between 1 and 65535.');
+      }
+      return port;
+    },
+    get user(): string {
+      return required("SMTP_USER", process.env.SMTP_USER);
+    },
+    get pass(): string {
+      return required("SMTP_PASS", process.env.SMTP_PASS);
+    },
+    get from(): string {
+      return (
+        process.env.SMTP_FROM?.trim() ||
+        `Healthcare Platform <${process.env.SMTP_USER ?? ""}>`
+      );
+    },
+    /** Safe to call anywhere, never throws. */
+    get isConfigured(): boolean {
+      return Boolean(
+        process.env.SMTP_HOST &&
+          process.env.SMTP_PORT &&
+          process.env.SMTP_USER &&
+          process.env.SMTP_PASS,
+      );
+    },
+  },
 } as const;

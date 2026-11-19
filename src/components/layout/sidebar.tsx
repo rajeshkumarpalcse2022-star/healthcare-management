@@ -8,10 +8,12 @@ import type { SafeUser } from "@/types/auth";
 export function Sidebar({
   user,
   todayAppointmentCount = 0,
+  requestCounts,
   className,
 }: {
   user: SafeUser;
   todayAppointmentCount?: number;
+  requestCounts?: Record<string, number>;
   className?: string;
 }) {
   return (
@@ -35,6 +37,7 @@ export function Sidebar({
         <SidebarNav
           role={user.role}
           todayAppointmentCount={todayAppointmentCount}
+          requestCounts={requestCounts}
         />
       </div>
 

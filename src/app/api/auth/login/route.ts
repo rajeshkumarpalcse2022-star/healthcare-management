@@ -11,6 +11,7 @@ import { User } from "@/models/User";
 import {
   loginSchema,
   normalizeEmail,
+  normalizeLoginIdentifier,
   toFieldIssues,
 } from "@/lib/validation/auth";
 import type { AuthErrorBody, LoginSuccessBody } from "@/types/auth";
@@ -42,8 +43,10 @@ function errorResponse(
  * POST /api/auth/login
  *
  * Validates input, verifies credentials server-side and issues the HTTP-only
- * session cookie. Failure messages stay generic so responses never reveal
- * whether an email address exists.
+ * session cookie. The `email` field accepts either an email address or a
+ * unique account ID (`DOC-XXXXX` / `LAB-XXXXX` / `PAT-XXXXX`). Failure
+ * messages stay generic so responses never reveal whether an identifier
+ * exists.
  */
 export async function POST(request: Request): Promise<NextResponse> {
   let body: unknown;
@@ -63,12 +66,17 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const { password, rememberMe, next } = parsed.data;
-  const email = normalizeEmail(parsed.data.email);
+  const identifier = normalizeLoginIdentifier(parsed.data.email);
 
   try {
     await connectToDatabase();
 
-    const user = await User.findOne({ email }).select("+passwordHash");
+    // Accept either an email address or a unique account ID.
+    const lookup = identifier.includes("@")
+      ? { email: normalizeEmail(identifier) }
+      : { uniqueId: identifier };
+
+    const user = await User.findOne(lookup).select("+passwordHash");
 
     if (!user) {
       await verifyPassword(password, TIMING_EQUALIZER_HASH);

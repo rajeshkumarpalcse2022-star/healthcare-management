@@ -671,7 +671,7 @@ export function CollectionFlow({ user }: CollectionFlowProps) {
                 </Button>
               </Link>
               <Link href="/my-collections" className="inline-flex">
-                <Button variant="outline">My pickup requests</Button>
+                <Button variant="outline">My bookings</Button>
               </Link>
               <Button variant="ghost" onClick={resetFlow}>
                 Request another pickup
@@ -695,7 +695,7 @@ export function CollectionFlow({ user }: CollectionFlowProps) {
         ]}
         actions={
           <Link href="/my-collections" className="inline-flex">
-            <Button variant="outline">My pickup requests</Button>
+            <Button variant="outline">My bookings</Button>
           </Link>
         }
       />

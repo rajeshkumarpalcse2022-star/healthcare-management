@@ -13,6 +13,8 @@ export interface SafeUser {
   name: string;
   email: string;
   phone: string | null;
+  /** Display-safe unique account ID (`PAT-XXXXX` / `DOC-XXXXX` / `LAB-XXXXX`). */
+  uniqueId?: string;
   role: Role;
   isActive: boolean;
   /**
@@ -67,4 +69,31 @@ export interface MeSuccessBody {
 /** `POST /api/auth/logout` success body. */
 export interface LogoutSuccessBody {
   success: true;
+}
+
+/** `POST /api/auth/otp/send` success body. */
+export interface OtpSendSuccessBody {
+  success: true;
+  /** Seconds until the OTP expires (for the resend countdown). */
+  expiresInSeconds: number;
+}
+
+/** `POST /api/auth/otp/verify` success body - account created + logged in. */
+export interface OtpVerifySuccessBody {
+  success: true;
+  user: SafeUser;
+  redirectTo: string;
+}
+
+/** Provisioning credentials returned once when an admin creates doctor/lab. */
+export interface ProvisionedCredentials {
+  uniqueId: string;
+  /** Plain-text generated password - shown once, never stored. */
+  password: string;
+}
+
+/** `POST /api/auth/change-credentials` success body. */
+export interface ChangeCredentialsSuccessBody {
+  success: true;
+  user: SafeUser;
 }

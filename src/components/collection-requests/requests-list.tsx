@@ -120,6 +120,7 @@ export function CollectionRequestsList() {
   });
   const { state, refresh } = useApiList<CollectionRequestSummary>(
     `/api/collection-requests${query}`,
+    { pollIntervalMs: 15_000 },
   );
 
   const [prevServedPage, setPrevServedPage] = React.useState(state.meta.page);

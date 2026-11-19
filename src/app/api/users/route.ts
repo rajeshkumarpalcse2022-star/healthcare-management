@@ -19,6 +19,10 @@ import {
 } from "@/lib/api/response";
 import { User } from "@/models/User";
 import {
+  generateUniqueId,
+  uniqueIdPrefixForRole,
+} from "@/lib/unique-id";
+import {
   containsRegex,
   toFieldIssues,
 } from "@/lib/validation/common";
@@ -29,6 +33,8 @@ import {
 import type { SafeUser } from "@/types/auth";
 
 export const dynamic = "force-dynamic";
+
+const MAX_UNIQUE_ID_ATTEMPTS = 5;
 
 /**
  * GET /api/users
@@ -146,10 +152,31 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     const passwordHash = await hashPassword(password);
 
+    // Mint a unique account ID when the role has a prefix (PATIENT/DOCTOR/
+    // LAB_MANAGER). Other provisionable roles (ADMIN, STAFF, COLLECTOR) skip
+    // it for now - they can be backfilled later if needed.
+    const kind = uniqueIdPrefixForRole(role);
+    let uniqueId: string | undefined;
+    if (kind) {
+      uniqueId = generateUniqueId(kind);
+      for (let attempt = 0; attempt < MAX_UNIQUE_ID_ATTEMPTS; attempt += 1) {
+        const taken = await User.findOne({ uniqueId }).select("_id").lean();
+        if (!taken) break;
+        uniqueId = generateUniqueId(kind);
+        if (attempt === MAX_UNIQUE_ID_ATTEMPTS - 1) {
+          return errorResponse(
+            503,
+            "Unable to allocate a unique ID right now. Please try again.",
+          );
+        }
+      }
+    }
+
     const user = await User.create({
       name,
       email,
       phone,
+      ...(uniqueId ? { uniqueId } : {}),
       passwordHash,
       role,
       isActive: true,

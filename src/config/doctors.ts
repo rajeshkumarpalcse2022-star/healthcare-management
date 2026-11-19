@@ -47,6 +47,18 @@ export const STATUS_FILTERS = ["all", "active", "inactive"] as const;
 
 export type StatusFilter = (typeof STATUS_FILTERS)[number];
 
+/**
+ * Formats an auto-generated doctor code, e.g. `DR-0001`.
+ *
+ * Codes are sequential and zero-padded so they sort naturally and read
+ * cleanly in the UI. The `DR-` prefix matches existing doctor codes and stays
+ * distinct from the login unique ID (`DOC-XXXXX`). The sequence is shared
+ * platform-wide (one Counter).
+ */
+export function formatDoctorCode(sequence: number): string {
+  return `DR-${String(sequence).padStart(4, "0")}`;
+}
+
 /** Server-side pagination defaults for the module. */
 export const LIST_DEFAULT_LIMIT = 10;
 export const LIST_MAX_LIMIT = 50;

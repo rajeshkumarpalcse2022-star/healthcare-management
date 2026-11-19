@@ -18,6 +18,8 @@ export interface MobileDrawerProps {
   user: SafeUser;
   /** Remaining accepted appointments today (doctor sidebar badge). */
   todayAppointmentCount?: number;
+  /** Pending request counters keyed by navigation href. */
+  requestCounts?: Record<string, number>;
 }
 
 /** Off-canvas navigation for mobile and tablet viewports. */
@@ -26,6 +28,7 @@ export function MobileDrawer({
   onClose,
   user,
   todayAppointmentCount = 0,
+  requestCounts,
 }: MobileDrawerProps) {
   const { logout, isLoggingOut } = useLogout();
   React.useEffect(() => {
@@ -93,6 +96,7 @@ export function MobileDrawer({
             onNavigate={onClose}
             role={user.role}
             todayAppointmentCount={todayAppointmentCount}
+            requestCounts={requestCounts}
           />
         </div>
 

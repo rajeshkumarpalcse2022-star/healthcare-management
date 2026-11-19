@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CollectionFlow } from "@/components/home-collection/collection-flow";
+import { HomeCollectionsList } from "@/components/home-collection/home-collections-list";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -95,9 +96,9 @@ export default async function HomeCollectionPage() {
   }
 
   if (!canCreateCollection(user.role)) {
-    // Management roles (LAB_MANAGER, STAFF) land here instead of a dead
-    // "no access" state - the wizard is for patients, the review list is
-    // for them.
+    // Management roles (LAB_MANAGER, STAFF) see the home-collection request
+    // list here. Lab-visit requests have their own section, while the merged
+    // Collection Requests queue lists both types together.
     if (canViewCollectionManagement(user.role)) {
       return (
         <>
@@ -111,27 +112,14 @@ export default async function HomeCollectionPage() {
             ]}
             actions={
               <Link href="/home-collections/manage" className="inline-flex">
-                <Button>
+                <Button variant="outline">
                   <IconHome className="size-4" />
-                  Open request list
+                  All collection requests
                 </Button>
               </Link>
             }
           />
-          <Card>
-            <CardContent>
-              <EmptyState
-                icon={IconHome}
-                title="Manage collection requests"
-                description="Review new pickup requests, accept or reject them, and assign collectors from the management list."
-                action={
-                  <Link href="/home-collections/manage" className="inline-flex">
-                    <Button>Open request list</Button>
-                  </Link>
-                }
-              />
-            </CardContent>
-          </Card>
+          <HomeCollectionsList user={user} />
         </>
       );
     }

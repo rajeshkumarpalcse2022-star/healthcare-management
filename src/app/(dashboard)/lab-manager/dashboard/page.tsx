@@ -27,16 +27,16 @@ const quickLinks = [
     description: "Approve or reject pending lab-visit and pickup requests.",
   },
   {
-    label: "Online Bookings",
+    label: "Lab Visits",
     href: "/lab-bookings",
     icon: IconCalendarCheck,
-    description: "Process and track online lab bookings.",
+    description: "Review lab visit requests and bookings.",
   },
   {
     label: "Home Collections",
-    href: "/home-collections/manage?view=collections",
+    href: "/home-collection",
     icon: IconHome,
-    description: "Assign collectors and manage pickup requests.",
+    description: "Review pickup requests and assign collectors.",
   },
   {
     label: "Lab Tests",

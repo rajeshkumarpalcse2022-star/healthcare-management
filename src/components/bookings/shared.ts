@@ -110,16 +110,16 @@ export const STATUS_OPTIONS: { value: string; label: string }[] = [
 ];
 
 /**
- * Status filter options for the Online Booking management section. Pending
- * requests are deliberately absent: they live in the central Collection
- * Requests queue (`/home-collections/manage`), so management opens on
- * `REVIEWED` - every request that already has a review decision.
+ * Status filter options for the Lab Visit management section. Every status is
+ * selectable because pending requests are worked directly from this surface;
+ * `REVIEWED` (everything except pending) remains available as a quick filter.
  */
 export const MANAGEMENT_STATUS_OPTIONS: { value: string; label: string }[] = [
-  { value: "REVIEWED", label: "Reviewed" },
+  { value: "all", label: "All lab visits" },
+  { value: "PENDING", label: "Pending review" },
   { value: "CONFIRMED", label: "Confirmed" },
   { value: "REJECTED", label: "Rejected" },
   { value: "CANCELLED", label: "Cancelled" },
   { value: "COMPLETED", label: "Completed" },
-  { value: "all", label: "All statuses (incl. pending)" },
+  { value: "REVIEWED", label: "Reviewed only" },
 ];

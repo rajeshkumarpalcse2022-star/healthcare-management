@@ -65,6 +65,7 @@ export interface MyCollectionsListProps {
  */
 export function MyCollectionsList({ mode }: MyCollectionsListProps) {
   const router = useRouter();
+  const isCollector = mode === "collector";
   const { search, setSearch, applied } = useDebouncedSearch();
   const [status, setStatus] = React.useState("all");
   const [page, setPage] = React.useState(1);
@@ -78,6 +79,7 @@ export function MyCollectionsList({ mode }: MyCollectionsListProps) {
   });
   const { state, refresh } = useApiList<HomeCollectionSummary>(
     `/api/home-collections${query}`,
+    { pollIntervalMs: isCollector ? 10_000 : 15_000 },
   );
 
   const [cancelTarget, setCancelTarget] =
@@ -204,15 +206,13 @@ export function MyCollectionsList({ mode }: MyCollectionsListProps) {
   const emptyTitle = hasFilters
     ? "No collections match your filters"
     : mode === "patient"
-      ? "No collection requests yet"
+      ? "No bookings yet"
       : "No pickups assigned";
   const emptyDescription = hasFilters
     ? "Try adjusting the search or status filter."
     : mode === "patient"
       ? "Request a home sample pickup to see it here."
       : "Assigned pickups will appear here once the laboratory assigns them to you.";
-
-  const isCollector = mode === "collector";
 
   return (
     <div className="flex flex-col gap-4">

@@ -572,7 +572,7 @@ export function BookingDetail({ bookingId, user }: BookingDetailProps) {
           variant="ghost"
           onClick={() => router.push(isOwner ? "/my-bookings" : "/lab-bookings")}
         >
-          {isOwner ? "My bookings" : "All bookings"}
+          {isOwner ? "My lab bookings" : "All bookings"}
           <IconArrowRight className="size-4" />
         </Button>
         {booking.status === "PENDING" || booking.status === "CONFIRMED" ? (

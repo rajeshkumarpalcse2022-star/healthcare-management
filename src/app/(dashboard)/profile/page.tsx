@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { PatientSelfEditor } from "@/components/patients/patient-self-editor";
+import { ChangeCredentialsCard } from "@/components/profile/change-credentials-card";
 import { formatDateTime } from "@/components/bookings/shared";
 import { PageHeader } from "@/components/shared/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +14,12 @@ import { getCurrentUser } from "@/lib/auth";
 export const metadata: Metadata = {
   title: "My Profile",
 };
+
+/** Roles that may optionally change their own login ID + password. */
+const CAN_CHANGE_CREDENTIALS = new Set<string>([
+  ROLES.DOCTOR,
+  ROLES.LAB_MANAGER,
+]);
 
 /**
  * Read-only account profile (`/profile`).
@@ -59,6 +66,16 @@ export default async function ProfilePage() {
                   </Badge>
                 </dd>
               </div>
+              {user.uniqueId ? (
+                <div className="flex items-start justify-between gap-3">
+                  <dt className="shrink-0 text-sm text-ink-muted">Unique ID</dt>
+                  <dd>
+                    <code className="rounded bg-surface-muted px-2 py-0.5 font-mono text-sm font-semibold tracking-wide text-ink">
+                      {user.uniqueId}
+                    </code>
+                  </dd>
+                </div>
+              ) : null}
               <div className="flex items-start justify-between gap-3">
                 <dt className="shrink-0 text-sm text-ink-muted">Member since</dt>
                 <dd className="min-w-0 text-sm font-medium text-ink">
@@ -95,6 +112,12 @@ export default async function ProfilePage() {
       {user.role === ROLES.PATIENT ? (
         <div className="mt-4">
           <PatientSelfEditor />
+        </div>
+      ) : null}
+
+      {CAN_CHANGE_CREDENTIALS.has(user.role) ? (
+        <div className="mt-4">
+          <ChangeCredentialsCard currentUniqueId={user.uniqueId} />
         </div>
       ) : null}
     </>

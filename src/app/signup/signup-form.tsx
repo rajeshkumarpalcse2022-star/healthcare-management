@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import {
   IconAlertTriangle,
+  IconChevronLeft,
   IconEye,
   IconEyeOff,
   IconLock,
@@ -14,9 +15,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
-import { getDashboardRouteForRole } from "@/config/auth";
-import type { AuthErrorBody, RegisterSuccessBody } from "@/types/auth";
+import type {
+  AuthErrorBody,
+  OtpSendSuccessBody,
+  OtpVerifySuccessBody,
+} from "@/types/auth";
 
 interface FieldErrors {
   name?: string;
@@ -24,36 +27,51 @@ interface FieldErrors {
   phone?: string;
   password?: string;
   confirmPassword?: string;
-  role?: string;
+  otp?: string;
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const OTP_PATTERN = /^\d{6}$/;
+
+type Step = "details" | "otp";
 
 /**
- * Client registration form.
+ * Client registration form for patients.
  *
- * Performs light required/format checks for responsiveness only - the server
+ * Step 1 collects details and requests an OTP via email. Step 2 verifies the
+ * OTP and creates the account (server issues the session cookie). The server
  * revalidates everything with Zod and is the source of truth for the result.
- * The role select is limited to PATIENT and DOCTOR; privileged management
- * roles cannot be chosen here.
  */
 export function SignupForm() {
   const router = useRouter();
 
+  const [step, setStep] = React.useState<Step>("details");
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [phone, setPhone] = React.useState("");
-  const [role, setRole] = React.useState("PATIENT");
   const [password, setPassword] = React.useState("");
   const [confirmPassword, setConfirmPassword] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
   const [showConfirm, setShowConfirm] = React.useState(false);
+  const [otp, setOtp] = React.useState("");
+  const [resendIn, setResendIn] = React.useState(0);
 
   const [fieldErrors, setFieldErrors] = React.useState<FieldErrors>({});
   const [formError, setFormError] = React.useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isSendingOtp, setIsSendingOtp] = React.useState(false);
 
-  function validate(): FieldErrors {
+  // Resend countdown ticker.
+  const resendActive = resendIn > 0;
+  React.useEffect(() => {
+    if (!resendActive) return;
+    const timer = window.setInterval(() => {
+      setResendIn((value) => (value <= 1 ? 0 : value - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [resendActive]);
+
+  function validateDetails(): FieldErrors {
     const errors: FieldErrors = {};
     const trimmedName = name.trim();
     const trimmedEmail = email.trim();
@@ -82,14 +100,51 @@ export function SignupForm() {
       errors.confirmPassword = "Passwords do not match.";
     }
 
-    if (role !== "PATIENT" && role !== "DOCTOR") {
-      errors.role = "Choose either Patient or Doctor to sign up.";
-    }
-
     return errors;
   }
 
-  async function handleSubmit(
+  async function requestOtp(): Promise<void> {
+    setFormError(null);
+    const errors = validateDetails();
+    setFieldErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    setIsSendingOtp(true);
+    try {
+      const response = await fetch("/api/auth/otp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+
+      const data = (await response.json().catch(() => null)) as
+        | OtpSendSuccessBody
+        | AuthErrorBody
+        | null;
+
+      if (response.ok && data && data.success) {
+        setStep("otp");
+        setOtp("");
+        setFieldErrors({});
+        setResendIn(Math.min(data.expiresInSeconds, 60));
+        return;
+      }
+
+      setFormError(
+        data && !data.success
+          ? data.error
+          : "Unable to send the verification code. Please try again.",
+      );
+    } catch {
+      setFormError(
+        "Unable to reach the server. Check your connection and try again.",
+      );
+    } finally {
+      setIsSendingOtp(false);
+    }
+  }
+
+  async function verifyOtpAndCreate(
     event: React.FormEvent<HTMLFormElement>,
   ): Promise<void> {
     event.preventDefault();
@@ -97,14 +152,15 @@ export function SignupForm() {
 
     setFormError(null);
 
-    const errors = validate();
-    setFieldErrors(errors);
-    if (Object.keys(errors).length > 0) return;
-
+    if (!OTP_PATTERN.test(otp.trim())) {
+      setFieldErrors({ otp: "Enter the 6-digit verification code." });
+      return;
+    }
+    setFieldErrors({});
     setIsSubmitting(true);
 
     try {
-      const response = await fetch("/api/auth/register", {
+      const response = await fetch("/api/auth/otp/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -113,17 +169,18 @@ export function SignupForm() {
           phone: phone.trim() || undefined,
           password,
           confirmPassword,
-          role,
+          role: "PATIENT",
+          otp: otp.trim(),
         }),
       });
 
       const data = (await response.json().catch(() => null)) as
-        | RegisterSuccessBody
+        | OtpVerifySuccessBody
         | AuthErrorBody
         | null;
 
       if (response.ok && data && data.success) {
-        router.push(getDashboardRouteForRole(data.user.role));
+        router.push(data.redirectTo || "/patient/dashboard");
         router.refresh();
         return;
       }
@@ -136,21 +193,10 @@ export function SignupForm() {
       ) {
         const mapped: FieldErrors = {};
         for (const issue of data.issues) {
-          if (
-            issue.field === "name" ||
-            issue.field === "email" ||
-            issue.field === "phone" ||
-            issue.field === "password" ||
-            issue.field === "confirmPassword" ||
-            issue.field === "role"
-          ) {
-            mapped[issue.field] = issue.message;
-          }
+          if (issue.field === "otp") mapped.otp = issue.message;
         }
         setFieldErrors(mapped);
-        if (Object.keys(mapped).length === 0) {
-          setFormError(data.error);
-        }
+        if (!mapped.otp) setFormError(data.error);
         return;
       }
 
@@ -168,10 +214,108 @@ export function SignupForm() {
     }
   }
 
+  function goBackToDetails(): void {
+    if (isSubmitting) return;
+    setStep("details");
+    setOtp("");
+    setFormError(null);
+    setFieldErrors({});
+  }
+
+  if (step === "otp") {
+    return (
+      <Card className="overflow-hidden">
+        <CardContent className="p-6 sm:p-8">
+          <form
+            onSubmit={verifyOtpAndCreate}
+            noValidate
+            className="space-y-5"
+          >
+            {formError ? (
+              <div
+                role="alert"
+                className="flex items-start gap-2.5 rounded-control border border-danger-line bg-danger-soft px-3.5 py-3 text-sm font-medium text-danger animate-fade-in"
+              >
+                <IconAlertTriangle className="mt-0.5 size-4 shrink-0" />
+                <p className="min-w-0 leading-relaxed">{formError}</p>
+              </div>
+            ) : null}
+
+            <div className="rounded-control border border-border bg-surface-muted px-3.5 py-3 text-sm text-ink-muted">
+              We sent a 6-digit code to{" "}
+              <span className="font-medium text-ink">{email.trim()}</span>.
+              Enter it below to verify your email and create your account.
+            </div>
+
+            <Input
+              label="Verification code"
+              name="otp"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              required
+              autoFocus
+              maxLength={6}
+              placeholder="000000"
+              value={otp}
+              onChange={(event) =>
+                setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))
+              }
+              error={fieldErrors.otp}
+              disabled={isSubmitting}
+              containerClassName="[&_input]:tracking-[0.35em]"
+            />
+
+            <Button
+              type="submit"
+              className="w-full"
+              size="lg"
+              loading={isSubmitting}
+              disabled={otp.length !== 6}
+            >
+              Verify & create account
+            </Button>
+
+            <div className="flex items-center justify-between text-sm">
+              <button
+                type="button"
+                onClick={goBackToDetails}
+                disabled={isSubmitting}
+                className="inline-flex items-center gap-1.5 text-ink-muted transition-colors hover:text-ink disabled:opacity-50"
+              >
+                <IconChevronLeft className="size-3.5" />
+                Back
+              </button>
+              <button
+                type="button"
+                onClick={() => void requestOtp()}
+                disabled={isSendingOtp || resendIn > 0}
+                className="font-medium text-brand-700 transition-colors hover:text-brand-800 disabled:opacity-50 dark:text-brand-300 dark:hover:text-brand-200"
+              >
+                {resendIn > 0
+                  ? `Resend in ${resendIn}s`
+                  : isSendingOtp
+                    ? "Sending..."
+                    : "Resend code"}
+              </button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="overflow-hidden">
       <CardContent className="p-6 sm:p-8">
-        <form onSubmit={handleSubmit} noValidate className="space-y-5">
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void requestOtp();
+          }}
+          noValidate
+          className="space-y-5"
+        >
           {formError ? (
             <div
               role="alert"
@@ -194,7 +338,7 @@ export function SignupForm() {
             onChange={(event) => setName(event.target.value)}
             error={fieldErrors.name}
             icon={<IconUser className="size-4" />}
-            disabled={isSubmitting}
+            disabled={isSendingOtp}
           />
 
           <Input
@@ -211,7 +355,7 @@ export function SignupForm() {
             onChange={(event) => setEmail(event.target.value)}
             error={fieldErrors.email}
             icon={<IconMail className="size-4" />}
-            disabled={isSubmitting}
+            disabled={isSendingOtp}
           />
 
           <Input
@@ -223,21 +367,7 @@ export function SignupForm() {
             value={phone}
             onChange={(event) => setPhone(event.target.value)}
             error={fieldErrors.phone}
-            disabled={isSubmitting}
-          />
-
-          <Select
-            label="I am signing up as"
-            name="role"
-            value={role}
-            onChange={(event) => setRole(event.target.value)}
-            error={fieldErrors.role}
-            disabled={isSubmitting}
-            options={[
-              { value: "PATIENT", label: "Patient" },
-              { value: "DOCTOR", label: "Doctor" },
-            ]}
-            hint="Doctor accounts require clinic affiliation approval before full access."
+            disabled={isSendingOtp}
           />
 
           <Input
@@ -251,7 +381,7 @@ export function SignupForm() {
             onChange={(event) => setPassword(event.target.value)}
             error={fieldErrors.password}
             icon={<IconLock className="size-4" />}
-            disabled={isSubmitting}
+            disabled={isSendingOtp}
             trailing={
               <button
                 type="button"
@@ -281,7 +411,7 @@ export function SignupForm() {
             onChange={(event) => setConfirmPassword(event.target.value)}
             error={fieldErrors.confirmPassword}
             icon={<IconLock className="size-4" />}
-            disabled={isSubmitting}
+            disabled={isSendingOtp}
             trailing={
               <button
                 type="button"
@@ -306,9 +436,9 @@ export function SignupForm() {
             type="submit"
             className="w-full"
             size="lg"
-            loading={isSubmitting}
+            loading={isSendingOtp}
           >
-            Create account
+            Send verification code
           </Button>
         </form>
       </CardContent>

@@ -11,7 +11,7 @@ import { ROLES } from "@/config/roles";
 import { getCurrentUser } from "@/lib/auth";
 
 export const metadata: Metadata = {
-  title: "My pickup requests",
+  title: "My bookings",
 };
 
 /**
@@ -29,19 +29,19 @@ export default async function MyCollectionsPage() {
     <>
       <PageHeader
         eyebrow="Diagnostics"
-        title="My pickup requests"
+        title="My bookings"
         description={
           isPatient
-            ? "Your home sample collection requests - track pickup status or cancel when eligible."
+            ? "Your home sample collection bookings - track pickup status or cancel when eligible."
             : "Collection history is available to patient accounts."
         }
         breadcrumbs={[
           { label: "Dashboard", href: "/dashboard" },
-          { label: "My pickup requests" },
+          { label: "My bookings" },
         ]}
         actions={
           isPatient ? (
-            <Link href="/home-collection" className="inline-flex">
+            <Link href="/book-a-test" className="inline-flex">
               <Button>
                 <IconHome className="size-4" />
                 Request a pickup

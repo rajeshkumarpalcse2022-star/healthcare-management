@@ -43,10 +43,10 @@ const quickLinks = [
     description: "Laboratory operations and test catalogue.",
   },
   {
-    label: "Online Booking",
-    href: "/bookings",
+    label: "Lab Visit",
+    href: "/lab-bookings",
     icon: IconCalendarCheck,
-    description: "Manage online lab bookings.",
+    description: "Review and manage lab visit requests.",
   },
   {
     label: "Home Collection",

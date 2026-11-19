@@ -51,22 +51,20 @@ export interface LabBookingsListProps {
 }
 
 /**
- * Operational booking management list for permitted roles (super admin,
- * admin, lab manager, staff). Server-side search, status and laboratory
- * filters with pagination; confirm / complete quick actions appear only for
- * roles that hold the status-write permission - the API re-checks on every
- * request regardless.
+ * Lab visit management list for permitted roles (super admin, admin, lab
+ * manager, staff). Server-side search, status and laboratory filters with
+ * pagination; confirm / complete quick actions appear only for roles that
+ * hold the status-write permission - the API re-checks on every request
+ * regardless.
  *
- * Opens on `REVIEWED`: pending requests are worked from the central
- * Collection Requests queue (`/home-collections/manage`), so this list shows
- * the decisions and their downstream lifecycle. Selecting "All statuses
- * (incl. pending)" surfaces pending rows here too, with the same quick
- * actions.
+ * Opens on "all" so new (pending) lab-visit requests land in this section
+ * immediately. Home-collection requests never appear here - they have their
+ * own section, and the merged Collection Requests queue lists both types.
  */
 export function LabBookingsList({ role }: LabBookingsListProps) {
   const router = useRouter();
   const { search, setSearch, applied } = useDebouncedSearch();
-  const [status, setStatus] = React.useState("REVIEWED");
+  const [status, setStatus] = React.useState("all");
   const [laboratory, setLaboratory] = React.useState("");
   const [page, setPage] = React.useState(1);
   const [limit, setLimit] = React.useState(10);
@@ -143,13 +141,13 @@ export function LabBookingsList({ role }: LabBookingsListProps) {
 
   const { data, meta, loading, error } = state;
   const hasFilters =
-    applied.length > 0 || status !== "REVIEWED" || laboratory.length > 0;
+    applied.length > 0 || status !== "all" || laboratory.length > 0;
   const emptyTitle = hasFilters
-    ? "No bookings match your filters"
-    : "No reviewed bookings yet";
+    ? "No lab visits match your filters"
+    : "No lab visit requests yet";
   const emptyDescription = hasFilters
     ? "Try adjusting the search or filters."
-    : "Bookings appear here once a lab manager has approved or rejected them. Pending requests live in the Collection requests queue.";
+    : "New lab-visit requests from patients will appear here as soon as they are submitted.";
 
   return (
     <div className="flex flex-col gap-4">

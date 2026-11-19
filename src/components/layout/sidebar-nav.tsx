@@ -35,6 +35,8 @@ interface SidebarNavProps {
   role?: Role;
   /** Remaining accepted appointments today, shown as a red sidebar counter. */
   todayAppointmentCount?: number;
+  /** Pending request counters keyed by navigation href. */
+  requestCounts?: Record<string, number>;
   className?: string;
 }
 
@@ -44,12 +46,14 @@ function NavItemLink({
   onNavigate,
   variant,
   badgeCount,
+  badgeLabel,
 }: {
   item: NavigationItem;
   active: boolean;
   onNavigate?: () => void;
   variant: "sidebar" | "drawer";
   badgeCount?: number;
+  badgeLabel?: string;
 }) {
   const Icon = item.icon;
   const showBadge = typeof badgeCount === "number" && badgeCount > 0;
@@ -81,9 +85,10 @@ function NavItemLink({
       <span className="min-w-0 flex-1 truncate">{item.label}</span>
       {showBadge ? (
         <span
-          aria-label={`${badgeCount} appointments remaining today`}
-          title={`${badgeCount} appointments remaining today`}
-          className="inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white"
+          key={badgeCount}
+          aria-label={badgeLabel}
+          title={badgeLabel}
+          className="animate-counter-pop inline-flex min-w-5 shrink-0 items-center justify-center rounded-full bg-danger px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white shadow-sm"
         >
           {badgeCount > 99 ? "99+" : badgeCount}
         </span>
@@ -102,6 +107,7 @@ export function SidebarNav({
   variant = "sidebar",
   role,
   todayAppointmentCount = 0,
+  requestCounts,
   className,
 }: SidebarNavProps) {
   const pathname = usePathname();
@@ -115,21 +121,31 @@ export function SidebarNav({
             {group.label}
           </p>
           <ul className="flex flex-col gap-0.5">
-            {group.items.map((item) => (
-              <li key={item.href}>
-                <NavItemLink
-                  item={item}
-                  active={isNavigationItemActive(pathname, item)}
-                  onNavigate={onNavigate}
-                  variant={variant}
-                  badgeCount={
-                    role === "DOCTOR" && item.href === "/doctor/appointments"
-                      ? todayAppointmentCount
-                      : undefined
-                  }
-                />
-              </li>
-            ))}
+            {group.items.map((item) => {
+              const isAppointmentBadge =
+                role === "DOCTOR" && item.href === "/doctor/appointments";
+              const badgeCount = isAppointmentBadge
+                ? todayAppointmentCount
+                : requestCounts?.[item.href];
+              const badgeLabel = isAppointmentBadge
+                ? `${badgeCount} appointments remaining today`
+                : `${badgeCount} pending request${
+                    badgeCount === 1 ? "" : "s"
+                  } for ${item.label}`;
+
+              return (
+                <li key={item.href}>
+                  <NavItemLink
+                    item={item}
+                    active={isNavigationItemActive(pathname, item)}
+                    onNavigate={onNavigate}
+                    variant={variant}
+                    badgeCount={badgeCount}
+                    badgeLabel={badgeLabel}
+                  />
+                </li>
+              );
+            })}
           </ul>
         </div>
       ))}

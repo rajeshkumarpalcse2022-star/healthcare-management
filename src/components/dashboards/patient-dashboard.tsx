@@ -3,12 +3,7 @@
 import Link from "next/link";
 import * as React from "react";
 
-import {
-  IconCalendarCheck,
-  IconHome,
-  IconStethoscope,
-} from "@/components/icons";
-import { statusBadge } from "@/components/bookings/shared";
+import { IconCalendarCheck } from "@/components/icons";
 import {
   collectionStatusBadge,
   formatDateLabel,
@@ -19,11 +14,9 @@ import { useApiList } from "@/hooks/use-api-list";
 import {
   localDateString,
   pickUpcomingAppointments,
-  pickUpcomingBookings,
   pickUpcomingCollections,
 } from "@/lib/utils/dashboard-rows";
 import type { HomeCollectionSummary } from "@/types/home-collection";
-import type { LabBookingSummary } from "@/types/lab-booking";
 import type { AppointmentSummary } from "@/types/appointment";
 import { DashboardRow, DashboardWidget } from "./shared-dashboard";
 
@@ -42,9 +35,6 @@ export function PatientDashboardWidgets() {
   const appointments = useApiList<AppointmentSummary>(
     "/api/appointments?limit=25",
   );
-  const bookings = useApiList<LabBookingSummary>(
-    "/api/lab-bookings?limit=25",
-  );
   const collections = useApiList<HomeCollectionSummary>(
     `/api/home-collections?dateFrom=${today}&limit=6`,
   );
@@ -53,11 +43,6 @@ export function PatientDashboardWidgets() {
     appointments.state.data === null
       ? null
       : pickUpcomingAppointments(appointments.state.data, today, 4);
-
-  const upcoming =
-    bookings.state.data === null
-      ? null
-      : pickUpcomingBookings(bookings.state.data, today, 4);
 
   const pickups =
     collections.state.data === null
@@ -96,45 +81,13 @@ export function PatientDashboardWidgets() {
       />
 
       <DashboardWidget
-        title="Lab bookings"
-        link={{ label: "View all", href: "/my-bookings" }}
-        state={bookings.state}
-        rows={upcoming}
-        onRetry={bookings.refresh}
-        emptyIcon={IconStethoscope}
-        emptyTitle="No upcoming lab bookings"
-        emptyDescription="Book a lab test and your visit will appear here once scheduled."
-        emptyAction={
-          <Link href="/book-a-test" className="inline-flex">
-            <Button variant="outline" size="sm">
-              Book a test
-            </Button>
-          </Link>
-        }
-        renderItem={(booking) => {
-          const badge = statusBadge(booking.status);
-          return (
-            <DashboardRow
-              key={booking.id}
-              href={`/lab-bookings/${booking.id}`}
-              mono
-              title={booking.bookingCode}
-              meta={`${formatDateLabel(booking.bookingDate)} · ${booking.timeSlot} · ${booking.laboratory?.name ?? "Laboratory"}`}
-              badge={badge.label}
-              badgeVariant={badge.variant}
-            />
-          );
-        }}
-      />
-
-      <DashboardWidget
-        title="Home collection requests"
+        title="My bookings"
         link={{ label: "View all", href: "/my-collections" }}
         state={collections.state}
         rows={pickups}
         onRetry={collections.refresh}
-        emptyIcon={IconHome}
-        emptyTitle="No pickups scheduled"
+        emptyIcon={IconCalendarCheck}
+        emptyTitle="No bookings scheduled"
         emptyDescription="Request a home sample collection and follow its progress here."
         emptyAction={
           <Link href="/home-collection" className="inline-flex">

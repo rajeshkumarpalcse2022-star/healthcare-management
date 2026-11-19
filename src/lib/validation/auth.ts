@@ -6,11 +6,13 @@ import type { AuthFieldIssue } from "@/types/auth";
  * Request validation for the authentication endpoints.
  */
 
-/** Login payload. `next` is an optional post-login redirect target. */
+/** Login payload. `email` accepts an email address OR a unique account ID. */
 export const loginSchema = z.object({
   email: z
-    .email("Enter a valid email address.")
-    .max(254, "Email address is too long."),
+    .string("Email or unique ID is required.")
+    .trim()
+    .min(1, "Email or unique ID is required.")
+    .max(254, "Identifier is too long."),
   password: z
     .string("Password is required.")
     .min(1, "Password is required.")
@@ -22,7 +24,7 @@ export const loginSchema = z.object({
 export type LoginInput = z.infer<typeof loginSchema>;
 
 /** Self-registration is limited to these roles. */
-export const PUBLIC_SIGNUP_ROLES = ["PATIENT", "DOCTOR"] as const;
+export const PUBLIC_SIGNUP_ROLES = ["PATIENT"] as const;
 
 export type PublicSignupRole = (typeof PUBLIC_SIGNUP_ROLES)[number];
 
@@ -53,7 +55,7 @@ export const registerSchema = z
       .string("Please confirm your password.")
       .min(1, "Please confirm your password."),
     role: z.enum(PUBLIC_SIGNUP_ROLES, {
-      message: "Choose either Patient or Doctor to sign up.",
+      message: "Only patients can create an account.",
     }),
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -66,6 +68,15 @@ export type RegisterInput = z.infer<typeof registerSchema>;
 /** Canonical email form used for lookups and storage. */
 export function normalizeEmail(value: string): string {
   return value.trim().toLowerCase();
+}
+
+/**
+ * Normalises a login identifier: trims, and uppercases when it looks like a
+ * unique account ID (no `@`). Emails keep their lowercased form.
+ */
+export function normalizeLoginIdentifier(value: string): string {
+  const trimmed = value.trim();
+  return trimmed.includes("@") ? trimmed.toLowerCase() : trimmed.toUpperCase();
 }
 
 /**

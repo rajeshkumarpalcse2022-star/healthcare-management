@@ -1,8 +1,10 @@
+import type { InvoiceStatus } from "@/config/billing";
 import type {
   CollectionEventType,
   CollectionStatus,
 } from "@/config/home-collection";
 import type { LaboratoryRef } from "@/types/laboratory";
+import type { LabReportRef } from "@/types/lab-report";
 
 /**
  * Public DTO shapes for the home sample-collection module (STEP 8).
@@ -52,6 +54,13 @@ export interface CollectorRef {
   id: string;
   name: string;
   phone: string | null;
+}
+
+export interface HomeCollectionInvoiceRef {
+  id: string;
+  invoiceCode: string;
+  status: InvoiceStatus;
+  totalAmount: number;
 }
 
 /** Collection summary row used by list responses (no pickup address). */
@@ -129,6 +138,10 @@ export interface HomeCollectionDetail extends HomeCollectionSummary {
     canRecordFailure: boolean;
     canRecordCollected: boolean;
   };
+  /** Published lab report, included for the owner and operational viewers. */
+  report?: LabReportRef | null;
+  /** Live invoice generated for this collection, when one exists. */
+  invoice?: HomeCollectionInvoiceRef | null;
   /** Audit timeline, included for the owner and operational viewers only. */
   history?: HomeCollectionEventDto[];
   updatedAt: string;

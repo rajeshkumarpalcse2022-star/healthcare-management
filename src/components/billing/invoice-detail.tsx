@@ -4,8 +4,9 @@ import * as React from "react";
 
 import { useRouter } from "next/navigation";
 
+import { IconDownload } from "@/components/icons";
 import { Badge, type BadgeVariant } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClasses } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -230,6 +231,14 @@ export function InvoiceDetail({ id }: { id: string }) {
               <Button type="button" variant="ghost" size="sm" onClick={() => router.push("/billing")}>
                 Back to invoices
               </Button>
+              <a
+                href={`/api/invoices/${invoice.id}/pdf`}
+                download={`${invoice.invoiceCode}.pdf`}
+                className={buttonClasses("outline", "sm")}
+              >
+                <IconDownload className="size-4" />
+                Download PDF
+              </a>
               {invoice.status === "DRAFT" ? (
                 <>
                   <Button

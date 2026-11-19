@@ -69,6 +69,7 @@ export function toSafeUser(user: UserRecord & { _id: unknown }): SafeUser {
     name: user.name,
     email: user.email,
     phone: user.phone ?? null,
+    ...(user.uniqueId ? { uniqueId: user.uniqueId } : {}),
     role: user.role,
     isActive: user.isActive,
     // Only forwarded when the stored value is an actual array - a missing

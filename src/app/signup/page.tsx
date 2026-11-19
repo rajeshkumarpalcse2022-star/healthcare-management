@@ -106,8 +106,8 @@ export default async function SignupPage() {
               Create your account
             </h1>
             <p className="mt-1.5 text-sm text-ink-muted">
-              Patients and doctors can self-register. Management roles are
-              provisioned by administrators.
+              Patients can create an account with email verification. Doctors
+              and laboratories are provisioned by administrators.
             </p>
           </div>
 

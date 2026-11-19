@@ -1143,7 +1143,7 @@ async function main() {
 
   const myBookingsPage = await page("/my-bookings", patient1Cookie);
   t("my bookings page renders", myBookingsPage.status === 200, String(myBookingsPage.status));
-  t("my bookings page shows the list heading", myBookingsPage.html.includes("My bookings"));
+  t("my bookings page shows the list heading", myBookingsPage.html.includes("My lab bookings"));
 
   const managePage = await page("/lab-bookings", admin);
   t("management list page renders", managePage.status === 200, String(managePage.status));

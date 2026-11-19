@@ -8,12 +8,13 @@ import {
   IconArrowRight,
   IconCheckCircle,
   IconHome,
+  IconNavigation,
   IconShieldCheck,
   IconTrash,
   IconUserCheck,
 } from "@/components/icons";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClasses } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -40,6 +41,7 @@ import { CollectionFailureDialog } from "./failure-dialog";
 import { CollectionRejectDialog } from "./reject-dialog";
 import { CollectorOtpPanel } from "./collector-otp-panel";
 import { PatientOtpPanel } from "./patient-otp-panel";
+import { LabReportPanel } from "./lab-report-panel";
 import {
   collectionStatusBadge,
   formatDateLabel,
@@ -105,13 +107,17 @@ export function CollectionDetail({
         if (error instanceof ApiRequestError && error.status === 404) {
           setPayload({ data: null, error: null, notFound: true });
         } else {
-          setPayload({
-            data: null,
-            error:
-              error instanceof ApiRequestError
-                ? error.message
-                : "Unable to load the collection.",
-            notFound: false,
+          setPayload((previous) => {
+            // Keep the last good snapshot if a background refresh fails.
+            if (previous?.data) return previous;
+            return {
+              data: null,
+              error:
+                error instanceof ApiRequestError
+                  ? error.message
+                  : "Unable to load the collection.",
+              notFound: false,
+            };
           });
         }
       });
@@ -120,11 +126,34 @@ export function CollectionDetail({
     };
   }, [collectionId, refreshKey]);
 
+  // Background refresh keeps patient / lab-manager / collector views in sync
+  // while the collector moves the request through its lifecycle.
+  React.useEffect(() => {
+    const timer = window.setInterval(() => {
+      setRefreshKey((value) => value + 1);
+    }, 10_000);
+    return () => window.clearInterval(timer);
+  }, [collectionId]);
+
   const collection = payload?.data ?? null;
   const caps = collection?.viewerCapabilities;
   const total = collection
     ? collection.items.reduce((sum, item) => sum + item.price, 0)
     : 0;
+  const mapDirectionsHref = collection
+    ? collection.address.latitude !== null &&
+      collection.address.longitude !== null
+      ? `https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=${collection.address.latitude},${collection.address.longitude}`
+      : `https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=${encodeURIComponent(
+          `${collection.address.addressLine1}, ${collection.address.city}, ${collection.address.state} ${collection.address.pincode}`,
+        )}`
+    : null;
+  const mapDirectionsLabel =
+    collection &&
+    collection.address.latitude !== null &&
+    collection.address.longitude !== null
+      ? `Open in Google Maps (${collection.address.latitude}, ${collection.address.longitude})`
+      : "Open in Google Maps";
 
   function refresh() {
     setRefreshKey((value) => value + 1);
@@ -329,6 +358,26 @@ export function CollectionDetail({
         </p>
       ) : null}
 
+      {status === "COLLECTED" ? (
+        <div
+          role="status"
+          className="mb-4 flex items-start gap-2.5 rounded-control border border-success-line bg-success-soft px-3.5 py-2.5 text-sm text-success-strong"
+        >
+          <IconCheckCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <div>
+            <p className="font-medium">Home collection completed successfully.</p>
+            <p className="mt-0.5 text-xs text-success-strong/80">
+              OTP verified and status updated to Collected for the patient and
+              laboratory team
+              {collection.collectedAt
+                ? ` on ${formatDateTime(collection.collectedAt)}`
+                : ""}
+              .
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       {/* Overview */}
       <Card>
         <CardHeader>
@@ -356,9 +405,23 @@ export function CollectionDetail({
           caps?.canAssign ||
           caps?.canAdvanceStatus ||
           caps?.canRecordFailure ||
-          caps?.canCancel ? (
+          caps?.canCancel ||
+          (user.role === "COLLECTOR" && mapDirectionsHref) ? (
             <div className="mb-5 flex flex-wrap gap-2">
-              {caps.canConfirm ? (
+              {user.role === "COLLECTOR" &&
+              collection.collector?.id === user.id &&
+              mapDirectionsHref ? (
+                <a
+                  href={mapDirectionsHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={buttonClasses("secondary", "md")}
+                >
+                  <IconNavigation className="size-4" aria-hidden="true" />
+                  {mapDirectionsLabel}
+                </a>
+              ) : null}
+              {caps?.canConfirm ? (
                 <Button
                   loading={statusLoading}
                   onClick={() => void advanceStatus("CONFIRMED")}
@@ -367,7 +430,7 @@ export function CollectionDetail({
                   Accept request
                 </Button>
               ) : null}
-              {caps.canReject ? (
+              {caps?.canReject ? (
                 <Button
                   variant="danger"
                   onClick={() => {
@@ -379,7 +442,7 @@ export function CollectionDetail({
                   Reject request
                 </Button>
               ) : null}
-              {caps.canAssign ? (
+              {caps?.canAssign ? (
                 <Button
                   variant="outline"
                   onClick={() => {
@@ -391,7 +454,7 @@ export function CollectionDetail({
                   {collection.collector ? "Reassign collector" : "Assign collector"}
                 </Button>
               ) : null}
-              {caps.canAdvanceStatus
+              {caps?.canAdvanceStatus
                 ? allowedNext.map((next) => (
                     <Button
                       key={next}
@@ -409,7 +472,7 @@ export function CollectionDetail({
                     </Button>
                   ))
                 : null}
-              {caps.canRecordFailure ? (
+              {caps?.canRecordFailure ? (
                 <Button
                   variant="danger"
                   onClick={() => {
@@ -421,7 +484,7 @@ export function CollectionDetail({
                   Record failed pickup
                 </Button>
               ) : null}
-              {caps.canCancel ? (
+              {caps?.canCancel ? (
                 <Button
                   variant="ghost"
                   onClick={() => {
@@ -507,18 +570,17 @@ export function CollectionDetail({
               {collection.address.latitude !== null &&
               collection.address.longitude !== null ? (
                 <a
-                  href={`https://www.google.com/maps/dir/?api=1&destination=${collection.address.latitude},${collection.address.longitude}`}
+                  href={`https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=${collection.address.latitude},${collection.address.longitude}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
                 >
                   <IconArrowRight className="size-3.5" aria-hidden="true" />
-                  Open in Google Maps ({collection.address.latitude},{" "}
-                  {collection.address.longitude})
+                  {mapDirectionsLabel}
                 </a>
               ) : (
                 <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                  href={`https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=${encodeURIComponent(
                     `${collection.address.addressLine1}, ${collection.address.city}, ${collection.address.state} ${collection.address.pincode}`,
                   )}`}
                   target="_blank"
@@ -526,7 +588,7 @@ export function CollectionDetail({
                   className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
                 >
                   <IconArrowRight className="size-3.5" aria-hidden="true" />
-                  Open address in Google Maps
+                  {mapDirectionsLabel}
                 </a>
               )}
             </div>
@@ -649,6 +711,24 @@ export function CollectionDetail({
           </p>
         </CardContent>
       </Card>
+
+      {/* Lab report & invoice */}
+      {status === "COLLECTED" || collection.report || collection.invoice ? (
+        <LabReportPanel
+          collectionId={collection.id}
+          collectionCode={collection.collectionCode}
+          report={collection.report}
+          invoice={collection.invoice}
+          canManage={
+            status === "COLLECTED" &&
+            (user.role === "LAB_MANAGER" ||
+              user.role === "ADMIN" ||
+              user.role === "SUPER_ADMIN" ||
+              user.role === "STAFF")
+          }
+          onCreated={refresh}
+        />
+      ) : null}
 
       {/* Audit history */}
       {collection.history && collection.history.length > 0 ? (

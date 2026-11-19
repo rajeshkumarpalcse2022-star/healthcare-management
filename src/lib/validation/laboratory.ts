@@ -13,6 +13,7 @@ import { isValidTimeZone } from "@/lib/utils/booking-time";
 import {
   codeSchema,
   objectIdSchema,
+  emailSchema,
   optionalEmailSchema,
   optionalPhoneSchema,
   optionalPincodeSchema,
@@ -117,12 +118,15 @@ export type LaboratoryHomeCollectionConfigInput = z.infer<
   typeof laboratoryHomeCollectionConfigSchema
 >;
 
-/** Create payload - name and code are mandatory; contact details optional. */
+/**
+ * Create payload - name, code and email are mandatory. Email becomes the
+ * login email for the auto-provisioned LAB_MANAGER account.
+ */
 export const laboratoryCreateSchema = z.object({
   name: requiredText(2, 120, "Laboratory name"),
   code: codeSchema,
   phone: optionalPhoneSchema,
-  email: optionalEmailSchema,
+  email: emailSchema,
   address: optionalText(240, "Address"),
   city: optionalText(80, "City"),
   state: optionalText(80, "State"),

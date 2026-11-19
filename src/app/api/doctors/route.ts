@@ -8,13 +8,19 @@ import {
   buildListMeta,
   errorResponse,
   isDuplicateKeyError,
-  itemResponse,
   listResponse,
   logApiFailure,
+  NO_STORE,
 } from "@/lib/api/response";
 import { toDoctorDto } from "@/lib/api/serializers";
+import { nextDoctorCode } from "@/lib/doctor/counter";
+import {
+  linkDoctorUser,
+  provisionAccount,
+} from "@/lib/provisioning";
 import { Clinic } from "@/models/Clinic";
 import { Doctor } from "@/models/Doctor";
+import { User } from "@/models/User";
 import {
   doctorCreateSchema,
   doctorListQuerySchema,
@@ -24,6 +30,9 @@ import {
   statusToBoolean,
   toFieldIssues,
 } from "@/lib/validation/common";
+import type { ItemResponse } from "@/types/api";
+import type { Doctor as DoctorDto } from "@/types/doctor";
+import type { ProvisionedCredentials } from "@/types/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -127,8 +136,11 @@ export async function GET(request: Request): Promise<NextResponse> {
 /**
  * POST /api/doctors
  *
- * Creates a doctor profile linked to an existing, active clinic.
- * Requires SUPER_ADMIN or ADMIN. No authentication fields are accepted.
+ * Creates a doctor profile linked to an existing, active clinic AND a login
+ * User account in the same operation. The User account receives a generated
+ * unique ID (`DOC-XXXXX`) and a temporary password; the credentials are
+ * returned exactly once in the response so the administrator can hand them
+ * to the doctor. Requires SUPER_ADMIN or ADMIN.
  */
 export async function POST(request: Request): Promise<NextResponse> {
   try {
@@ -156,14 +168,37 @@ export async function POST(request: Request): Promise<NextResponse> {
   try {
     await connectToDatabase();
 
-    const existing = await Doctor.findOne({ doctorCode: parsed.data.doctorCode })
-      .select("_id")
-      .lean();
-    if (existing) {
-      return errorResponse(
-        409,
-        "A doctor with this code already exists. Choose a different code.",
-      );
+    // Explicit codes are still honoured (imports/migrations); otherwise the
+    // server allocates the next sequential code (`DR-0001`, ...). Retry a few
+    // times if the counter ever collides with a pre-existing code.
+    let doctorCode = parsed.data.doctorCode;
+    if (doctorCode) {
+      const existing = await Doctor.findOne({ doctorCode })
+        .select("_id")
+        .lean();
+      if (existing) {
+        return errorResponse(
+          409,
+          "A doctor with this code already exists. Choose a different code.",
+        );
+      }
+    } else {
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const candidate = await nextDoctorCode();
+        const taken = await Doctor.findOne({ doctorCode: candidate })
+          .select("_id")
+          .lean();
+        if (!taken) {
+          doctorCode = candidate;
+          break;
+        }
+      }
+      if (!doctorCode) {
+        return errorResponse(
+          503,
+          "Unable to allocate a doctor code right now. Please try again.",
+        );
+      }
     }
 
     const clinicIds = [
@@ -195,10 +230,30 @@ export async function POST(request: Request): Promise<NextResponse> {
       );
     }
 
+    // Provision the login account first so a failure (e.g. email already
+    // taken by another user) aborts before the doctor profile is written.
+    const existingUser = await User.findOne({ email: parsed.data.email })
+      .select("_id")
+      .lean();
+    if (existingUser) {
+      return errorResponse(
+        409,
+        "A user with this email already exists. Use a different email.",
+      );
+    }
+
+    const provisioned = await provisionAccount({
+      name: parsed.data.name,
+      email: parsed.data.email,
+      phone: parsed.data.phone ?? null,
+      role: "DOCTOR",
+    });
+
     const doctor = await Doctor.create({
+      userId: provisioned.user.id,
       clinicId: parsed.data.clinicId,
       clinicIds,
-      doctorCode: parsed.data.doctorCode,
+      doctorCode,
       name: parsed.data.name,
       email: parsed.data.email,
       phone: parsed.data.phone ?? null,
@@ -214,14 +269,29 @@ export async function POST(request: Request): Promise<NextResponse> {
       isActive: true,
     });
 
+    // Ensure the Doctor.userId pointer is set even if create already wrote it.
+    await linkDoctorUser(String(doctor._id), provisioned.user.id);
+
     const populated = await Doctor.findById(doctor._id)
       .populate("clinicId", "name code city isActive imageUrl latitude longitude")
       .populate("clinicIds", "name code city isActive imageUrl latitude longitude")
       .lean();
 
-    return itemResponse(
-      toDoctorDto(populated ?? doctor.toObject()),
-      201,
+    const credentials: ProvisionedCredentials = {
+      uniqueId: provisioned.user.uniqueId ?? "",
+      password: provisioned.plainPassword,
+    };
+
+    // Custom envelope: doctor DTO + one-time provisioning credentials.
+    return NextResponse.json<
+      ItemResponse<DoctorDto> & { credentials?: ProvisionedCredentials }
+    >(
+      {
+        success: true,
+        data: toDoctorDto(populated ?? doctor.toObject()),
+        credentials,
+      },
+      { status: 201, headers: NO_STORE },
     );
   } catch (error) {
     if (isDuplicateKeyError(error)) {
